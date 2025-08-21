@@ -15,6 +15,7 @@ import UIKit
 struct Fixture: Decodable {
     let image: String
     let label: String
+    let size: Double
 }
 
 enum TestRes {

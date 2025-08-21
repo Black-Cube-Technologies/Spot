@@ -33,7 +33,8 @@
 		FAAC0FEA2E5747F9008305BB /* Exceptions for "Spot" folder in "SpotTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"Features/Lession Detection/ML/LesionDetector.swift",
+				Core/Constants/Constants.swift,
+				"Features/Lesion Detection/ML/LesionDetector.swift",
 			);
 			target = FA5BA71A2E5331E900768C06 /* SpotTests */;
 		};

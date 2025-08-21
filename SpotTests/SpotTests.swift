@@ -16,9 +16,9 @@ struct SpotTests {
         
         private let detector = LesionDetector()
         
-        @Test func top1_accuracy_is_above_threshold() async throws {
+        @Test func passing_accuracy_is_above_threshold() async throws {
             let fixtures = try loadImages()
-            #require(!fixtures.isEmpty, "No fixtures in fixtures.json")
+            #require(!fixtures.isEmpty, "No images in images.json")
             
             var correct = 0
             var total = 0
@@ -41,14 +41,14 @@ struct SpotTests {
             }
             
             let acc = Double(correct) / Double(max(total, 1))
-            print("Top-1 accuracy: \(acc), N=\(total), mean conf: \(confidences.reduce(0,+)/Float(max(total,1)))")
+            print("Passing accuracy: \(acc), N=\(total), mean conf: \(confidences.reduce(0,+)/Float(max(total,1)))")
             
             // ✅ Gate the build with a threshold you’re comfortable with
-            #expect(acc >= 0.80, "Top-1 accuracy below threshold (acc=\(acc))")
+            #expect(acc >= TestConstants.desiredDetectionPassingAccuracy, "Passing accuracy below threshold (acc=\(acc))")
         }
         
         
-        @Test func confidence_on_correct_preds_is_reasonable() async throws {
+        @Test func mean_confidence_is_reasonable() async throws {
             let fixtures = try loadImages()
             
             var confs: [Float] = []
@@ -63,11 +63,35 @@ struct SpotTests {
                 if pred == fx.label { confs.append(conf) }
             }
             
-            let mean = confs.reduce(0, +) / Float(max(confs.count, 1))
+            let mean = Double(confs.reduce(0, +) / Float(max(confs.count, 1)))
             print("Mean confidence on correct preds: \(mean)")
-            #expect(mean >= 0.60) // tune to your model
+            #expect(mean >= TestConstants.desiredDetectionMeanConfidence)
         }
     }
     
-    
+    @Suite struct LesionMeasuringAccuracyTests {
+        
+        private let measure = LesionMeasure()
+        
+        @Test func measuring_accuracy_is_above_threshold() async throws {
+            let fixtures = try loadImages()
+            
+            var correct = 0
+            var total = 0
+            for fx in fixtures {
+                let url = TestRes.url((fx.image as NSString).deletingPathExtension,
+                                      (fx.image as NSString).pathExtension.isEmpty ? nil : (fx.image as NSString).pathExtension)
+                guard let ui = UIImage(contentsOfFile: url.path),
+                      let cg = ui.cgImage,
+                      let pb = makePixelBuffer(from: cg) else { continue }
+                total += 1
+                let size =  measure.measureLesion()
+                if abs(size - fx.size) <= LesionConstants.sizeMargin { correct += 1}
+            }
+            
+            let acc = Double(correct) / Double(max(total, 1))
+            print("Passing accuracy: \(acc)")
+            #expect(acc >= TestConstants.desiredMeasureAccuracy)
+        }
+    }
 }
