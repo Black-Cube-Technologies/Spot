@@ -1,0 +1,73 @@
+//
+//  SpotTests.swift
+//  SpotTests
+//
+//  Created by Hasan on 18/08/2025.
+//
+
+import Testing
+@testable import Spot
+import CoreML
+import Vision
+import UIKit
+struct SpotTests {
+    
+    @Suite struct LesionDetectorAccuracyTests {
+        
+        private let detector = LesionDetector()
+        
+        @Test func top1_accuracy_is_above_threshold() async throws {
+            let fixtures = try loadImages()
+            #require(!fixtures.isEmpty, "No fixtures in fixtures.json")
+            
+            var correct = 0
+            var total = 0
+            var confidences: [Float] = []
+            
+            for fx in fixtures {
+                let imgURL = TestRes.url((fx.image as NSString).deletingPathExtension,
+                                         (fx.image as NSString).pathExtension.isEmpty ? nil : (fx.image as NSString).pathExtension)
+                guard let ui = UIImage(contentsOfFile: imgURL.path),
+                      let cg = ui.cgImage,
+                      let pb = makePixelBuffer(from: cg) else {
+                    Issue.record("Could not load/convert \(fx.image)")
+                    continue
+                }
+                
+                let (pred, conf) = await detector.classify(pb)
+                total += 1
+                confidences.append(conf)
+                if pred == fx.label { correct += 1 }
+            }
+            
+            let acc = Double(correct) / Double(max(total, 1))
+            print("Top-1 accuracy: \(acc), N=\(total), mean conf: \(confidences.reduce(0,+)/Float(max(total,1)))")
+            
+            // ✅ Gate the build with a threshold you’re comfortable with
+            #expect(acc >= 0.80, "Top-1 accuracy below threshold (acc=\(acc))")
+        }
+        
+        
+        @Test func confidence_on_correct_preds_is_reasonable() async throws {
+            let fixtures = try loadImages()
+            
+            var confs: [Float] = []
+            for fx in fixtures {
+                let url = TestRes.url((fx.image as NSString).deletingPathExtension,
+                                      (fx.image as NSString).pathExtension.isEmpty ? nil : (fx.image as NSString).pathExtension)
+                guard let ui = UIImage(contentsOfFile: url.path),
+                      let cg = ui.cgImage,
+                      let pb = makePixelBuffer(from: cg) else { continue }
+                
+                let (pred, conf) = await detector.classify(pb)
+                if pred == fx.label { confs.append(conf) }
+            }
+            
+            let mean = confs.reduce(0, +) / Float(max(confs.count, 1))
+            print("Mean confidence on correct preds: \(mean)")
+            #expect(mean >= 0.60) // tune to your model
+        }
+    }
+    
+    
+}

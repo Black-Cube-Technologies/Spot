@@ -1,0 +1,13 @@
+
+[
+  { "image": "lesion_01.jpg", "label": "lesionA" },
+  { "image": "lesion_02.jpg", "label": "lesionB" },
+  { "image": "lesion_03.jpg", "label": "lesionC" },
+  { "image": "lesion_04.jpg", "label": "lesionD" },
+  { "image": "lesion_05.jpg", "label": "lesionE" },
+  { "image": "lesion_06.jpg", "label": "lesionF" },
+  { "image": "lesion_07.jpg", "label": "lesionG" },
+  { "image": "lesion_08.jpg", "label": "lesionH" },
+  { "image": "lesion_09.jpg", "label": "lesionI" },
+  { "image": "lesion_10.jpg", "label": "lesionJ" }
+]
