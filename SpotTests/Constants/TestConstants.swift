@@ -10,4 +10,7 @@ class TestConstants{
     static let desiredMeasureAccuracy: Double = 0.8
     static let desiredDetectionMeanConfidence: Double = 0.7
     static let desiredDetectionPassingAccuracy: Double = 0.8
+    static let desiredFalsePositiveThreshold: Double = 0.1
+    
+    static let lesionLabel = "lesion"
 }

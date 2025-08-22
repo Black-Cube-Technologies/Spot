@@ -12,10 +12,15 @@ import CoreImage
 import CoreVideo
 import UIKit
 
-struct Fixture: Decodable {
+struct LesionTestSubject: Decodable {
     let image: String
     let label: String
     let size: Double
+}
+
+struct HealthyTestSubject: Decodable {
+    let image: String
+    let label: String
 }
 
 enum TestRes {
@@ -29,12 +34,17 @@ enum TestRes {
     private final class DummyClass {}
 }
 
-func loadImages() throws -> [Fixture] {
-    let url = TestRes.url("images", "json")
+func loadLesionImages() throws -> [LesionTestSubject] {
+    let url = TestRes.url("Lesions", "json")
     let data = try Data(contentsOf: url)
-    return try JSONDecoder().decode([Fixture].self, from: data)
+    return try JSONDecoder().decode([LesionTestSubject].self, from: data)
 }
 
+func loadHealthyImages() throws -> [HealthyTestSubject] {
+    let url = TestRes.url("Healthy", "json")
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode([HealthyTestSubject].self, from: data)
+}
 // Fast BGRA pixel buffer from CGImage
 func makePixelBuffer(from cgImage: CGImage) -> CVPixelBuffer? {
     let width = cgImage.width

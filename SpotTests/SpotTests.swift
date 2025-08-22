@@ -17,7 +17,7 @@ struct SpotTests {
         private let detector = LesionDetector()
         
         @Test func passing_accuracy_is_above_threshold() async throws {
-            let fixtures = try loadImages()
+            let fixtures = try loadLesionImages()
             try! #require(!fixtures.isEmpty, "No images in images.json")
             
             var correct = 0
@@ -49,7 +49,7 @@ struct SpotTests {
         
         
         @Test func mean_confidence_is_reasonable() async throws {
-            let fixtures = try loadImages()
+            let fixtures = try loadLesionImages()
             
             var confs: [Float] = []
             for fx in fixtures {
@@ -67,6 +67,38 @@ struct SpotTests {
             print("Mean confidence on correct preds: \(mean)")
             #expect(mean >= TestConstants.desiredDetectionMeanConfidence)
         }
+        
+        @Test func false_positives_is_below_threshold() async throws {
+            let fixtures = try loadHealthyImages()
+            try! #require(!fixtures.isEmpty, "No images in healthy.json")
+            
+            var falsePositive = 0
+            var total = 0
+            var confidences: [Float] = []
+            
+            for fx in fixtures {
+                let imgURL = TestRes.url((fx.image as NSString).deletingPathExtension,
+                                         (fx.image as NSString).pathExtension.isEmpty ? nil : (fx.image as NSString).pathExtension)
+                guard let ui = UIImage(contentsOfFile: imgURL.path),
+                      let cg = ui.cgImage,
+                      let pb = makePixelBuffer(from: cg) else {
+                    Issue.record("Could not load/convert \(fx.image)")
+                    continue
+                }
+                
+                let (pred, conf) = await detector.classify(pb)
+                print("false positive label",pred)
+                total += 1
+                confidences.append(conf)
+                if pred == TestConstants.lesionLabel { falsePositive += 1 }
+            }
+            
+            let acc = Double(falsePositive) / Double(max(total, 1))
+            print("False positive accuracy: \(falsePositive) \(acc), N=\(total), mean conf: \(confidences.reduce(0,+)/Float(max(total,1)))")
+            
+            // ✅ Gate the build with a threshold you’re comfortable with
+            #expect(acc <= TestConstants.desiredFalsePositiveThreshold, "False positive accuracy below threshold (acc=\(acc))")
+        }
     }
     
     struct LesionMeasuringTests {
@@ -74,7 +106,7 @@ struct SpotTests {
         private let measure = LesionMeasure()
         
         @Test func measuring_accuracy_is_above_threshold() async throws {
-            let fixtures = try loadImages()
+            let fixtures = try loadLesionImages()
             
             var correct = 0
             var total = 0

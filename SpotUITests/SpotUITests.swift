@@ -4,7 +4,7 @@
 //
 //  Created by Hasan on 18/08/2025.
 //
-/*
+
 import XCTest
 
 final class SpotUITests: XCTestCase {
@@ -39,4 +39,4 @@ final class SpotUITests: XCTestCase {
         }
     }
 }
-*/
+
