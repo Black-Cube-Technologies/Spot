@@ -7,5 +7,5 @@
 
 import Foundation
 class LesionConstants{
-    static let sizeMargin: Double = 0.0
+    static let sizeMargin: Double = 2.5
 }

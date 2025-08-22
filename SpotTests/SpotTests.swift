@@ -12,13 +12,13 @@ import Vision
 import UIKit
 struct SpotTests {
     
-    @Suite struct LesionDetectorAccuracyTests {
+    struct LesionDetectorTests {
         
         private let detector = LesionDetector()
         
         @Test func passing_accuracy_is_above_threshold() async throws {
             let fixtures = try loadImages()
-            #require(!fixtures.isEmpty, "No images in images.json")
+            try! #require(!fixtures.isEmpty, "No images in images.json")
             
             var correct = 0
             var total = 0
@@ -69,7 +69,7 @@ struct SpotTests {
         }
     }
     
-    @Suite struct LesionMeasuringAccuracyTests {
+    struct LesionMeasuringTests {
         
         private let measure = LesionMeasure()
         
@@ -83,7 +83,7 @@ struct SpotTests {
                                       (fx.image as NSString).pathExtension.isEmpty ? nil : (fx.image as NSString).pathExtension)
                 guard let ui = UIImage(contentsOfFile: url.path),
                       let cg = ui.cgImage,
-                      let pb = makePixelBuffer(from: cg) else { continue }
+                      let _ = makePixelBuffer(from: cg) else { continue }
                 total += 1
                 let size =  measure.measureLesion()
                 if abs(size - fx.size) <= LesionConstants.sizeMargin { correct += 1}

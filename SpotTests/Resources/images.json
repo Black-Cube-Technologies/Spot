@@ -1,13 +1,13 @@
 
 [
-  { "image": "lesion_01.jpg", "label": "lesionA","size": 2.5},
-  { "image": "lesion_02.jpg", "label": "lesionB","size": 2.5 },
-  { "image": "lesion_03.jpg", "label": "lesionC","size": 2.5 },
-  { "image": "lesion_04.jpg", "label": "lesionD","size": 2.5 },
-  { "image": "lesion_05.jpg", "label": "lesionE","size": 2.5 },
-  { "image": "lesion_06.jpg", "label": "lesionF","size": 2.5 },
-  { "image": "lesion_07.jpg", "label": "lesionG","size": 2.5 },
-  { "image": "lesion_08.jpg", "label": "lesionH","size": 2.5 },
-  { "image": "lesion_09.jpg", "label": "lesionI","size": 2.5 },
-  { "image": "lesion_10.jpg", "label": "lesionJ","size": 2.5 }
+  { "image": "lesion_01.jpg", "label": "lesion","size": 2.5},
+  { "image": "lesion_02.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_03.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_04.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_05.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_06.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_07.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_08.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_09.jpg", "label": "lesion","size": 2.5 },
+  { "image": "lesion_10.jpg", "label": "lesion","size": 2.5 }
 ]
