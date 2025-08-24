@@ -18,7 +18,7 @@ final class LesionDetector {
     private let mlQueue = DispatchQueue(label: "ml.queue")
     
     init() {
-        let modelURL = Bundle.main.url(forResource: "Lesion Detection", withExtension: "mlmodelc")!
+        let modelURL = Bundle.main.url(forResource: "Lesion_Detection_V2", withExtension: "mlmodelc")!
         let model = try! VNCoreMLModel(for: .init(contentsOf: modelURL))
         let req = VNCoreMLRequest(model: model)
         req.imageCropAndScaleOption = .centerCrop

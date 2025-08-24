@@ -35,6 +35,7 @@
 			membershipExceptions = (
 				Core/Constants/Constants.swift,
 				"Features/Lesion Detection/ML/Lesion Detection.mlmodel",
+				"Features/Lesion Detection/ML/Lesion_Detection_V2.mlmodel",
 				"Features/Lesion Detection/ML/LesionDetector.swift",
 			);
 			target = FA5BA71A2E5331E900768C06 /* SpotTests */;
