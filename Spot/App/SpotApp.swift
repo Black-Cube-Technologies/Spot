@@ -25,7 +25,7 @@ struct SpotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DetectionView()
+            LesionView(camera: CameraService(), detector: LesionDetector())
         }
         //.modelContainer(sharedModelContainer)
     }

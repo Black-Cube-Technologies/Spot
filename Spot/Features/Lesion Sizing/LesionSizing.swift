@@ -17,4 +17,5 @@ final class LesionMeasure {
     func measureLesion() -> Double{
         return 0.0 // Implementation to be done later
     }
+    
 }

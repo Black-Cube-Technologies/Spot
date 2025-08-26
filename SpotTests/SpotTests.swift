@@ -34,7 +34,7 @@ struct SpotTests {
                     continue
                 }
                 
-                let (pred, conf) = await detector.classify(pb)
+                let (pred, conf) = await detector.bestDetect(in: pb)
                 total += 1
                 confidences.append(conf)
                 if pred == fx.label { correct += 1 }
@@ -59,7 +59,7 @@ struct SpotTests {
                       let cg = ui.cgImage,
                       let pb = makePixelBuffer(from: cg) else { continue }
                 
-                let (pred, conf) = await detector.classify(pb)
+                let (pred, conf) = await detector.bestDetect(in: pb)
                 if pred == fx.label { confs.append(conf) }
             }
             
@@ -86,7 +86,7 @@ struct SpotTests {
                     continue
                 }
                 
-                let (pred, conf) = await detector.classify(pb)
+                let (pred, conf) = await detector.bestDetect(in: pb)
                 print("false positive label",pred)
                 total += 1
                 confidences.append(conf)
