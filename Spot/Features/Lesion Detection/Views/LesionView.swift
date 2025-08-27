@@ -12,7 +12,7 @@ struct LesionView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            CameraPreview(session: vm.session, previewLayer: $previewLayer)
+            CameraPreview(session: vm.session, vm: vm, previewLayer: $previewLayer)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { location in
@@ -45,7 +45,9 @@ struct LesionView: View {
             }
             .padding(.bottom, 24)
         }
-        .onAppear { vm.start() }
+        .onAppear {
+            vm.start()
+        }
         .onDisappear { vm.stop() }
     }
 }
