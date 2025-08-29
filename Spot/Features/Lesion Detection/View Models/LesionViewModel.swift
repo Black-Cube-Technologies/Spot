@@ -22,7 +22,8 @@ public final class LesionViewModel: ObservableObject {
     // Updated: boxNorm now means **preview-layer normalized (top-left)** so it matches what you draw.
     @Published public private(set) var boxNorm: CGRect = .null // Updated semantic
     @Published public var units: UnitSystem = .metric
-
+    @Published public var toastMessage:String?
+    
     // MARK: Dependencies
     private let camera: CameraStreaming
     private let detector: LesionDetecting
@@ -119,7 +120,9 @@ public final class LesionViewModel: ObservableObject {
         // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
         let previewNorm = layerNormRect(fromVision: best.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
 
+        print("m.diameter: \(m.equivDiameterMM)")
         await MainActor.run {
+            toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
             self.boxNorm  = previewNorm // Updated: now preview-normalized (top-left)
             self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
         }
@@ -199,5 +202,29 @@ public final class LesionViewModel: ObservableObject {
         case (.landscapeLeft, _):           return .down
         @unknown default:                   return .right
         }
+    }
+    
+    private let diameterThresholdMM: CGFloat = 100
+    private let diameterWindowSize = 5
+    private var lastDiameters: [CGFloat] = []
+    private var streakAnnounced = false
+    
+    @inline(__always)
+    private func pushDiameterAndShouldToast(_ d: CGFloat) -> Bool {
+        lastDiameters.append(d)
+        if lastDiameters.count > diameterWindowSize { lastDiameters = lastDiameters.suffix(diameterWindowSize) }
+
+        // Only if we have exactly 10 recent values and ALL are > threshold
+        if lastDiameters.count >= diameterWindowSize,
+           lastDiameters.allSatisfy({ $0 > diameterThresholdMM }) {
+//            if !streakAnnounced {
+//                streakAnnounced = true
+                return true           // fire once per streak
+           //}
+        } else {
+            // Any miss or <10 values resets the streak so we can fire again later
+            streakAnnounced = false
+        }
+        return false
     }
 }

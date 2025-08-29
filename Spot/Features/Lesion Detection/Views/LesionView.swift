@@ -49,5 +49,6 @@ struct LesionView: View {
             vm.start()
         }
         .onDisappear { vm.stop() }
+        .toast($vm.toastMessage)
     }
 }
