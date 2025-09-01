@@ -40,8 +40,7 @@
 				Core/Protocols/SizeMeasuring.swift,
 				"Features/Lesion Detection/ML/Lesion_Detection_V2.mlmodel",
 				"Features/Lesion Detection/ML/LesionDetector.swift",
-				"Features/Lesion Sizing/Domain/Entities/DetectedBox.swift",
-				"Features/Lesion Sizing/Domain/Entities/LesionBox.swift",
+				"Features/Lesion Sizing/Domain/Entities/Lesion.swift",
 				"Features/Lesion Sizing/Domain/Entities/Types.swift",
 			);
 			target = FA5BA71A2E5331E900768C06 /* SpotTests */;

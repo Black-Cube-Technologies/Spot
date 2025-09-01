@@ -19,7 +19,7 @@ struct BoxOverlay: View {
                               width: norm.width * w,
                               height: norm.height * h)
             Path { $0.addRect(rect) }
-                .stroke(.yellow, lineWidth: 3)
+                .stroke(.red, lineWidth: 3)
         }
         .allowsHitTesting(false)
     }

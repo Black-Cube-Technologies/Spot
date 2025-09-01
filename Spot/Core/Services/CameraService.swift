@@ -58,7 +58,7 @@ final class CameraService: NSObject,
 
             if let c = self.videoOutput.connection(with: .video) {
                 if c.isCameraIntrinsicMatrixDeliverySupported { c.isCameraIntrinsicMatrixDeliveryEnabled = true }
-                if #available(iOS 17.0, *) { c.videoRotationAngle = 90 } else { c.videoOrientation = .portrait }
+                //if #available(iOS 17.0, *) { c.videoRotationAngle = 90 } else { c.videoOrientation = .portrait }
             }
 
             // Depth (try; fall back to RGB-only if not supported)

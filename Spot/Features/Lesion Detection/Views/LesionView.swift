@@ -2,14 +2,15 @@ import SwiftUI
 import AVFoundation
 
 struct LesionView: View {
+    @EnvironmentObject private var router: Router
     @StateObject private var vm: LesionViewModel
     @State private var previewLayer: AVCaptureVideoPreviewLayer?
     @State private var calPoints: [CGPoint] = []
-
+    
     init(camera: CameraStreaming, detector: LesionDetecting) {
         _vm = StateObject(wrappedValue: LesionViewModel(camera: camera, detector: detector))
     }
-
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             CameraPreview(session: vm.session, vm: vm, previewLayer: $previewLayer)
@@ -25,17 +26,17 @@ struct LesionView: View {
                         calPoints.removeAll()
                     }
                 }
-
+            
             if !vm.boxNorm.isNull {
                 BoxOverlay(norm: vm.boxNorm).ignoresSafeArea()
             }
-
+            
             HStack(spacing: 12) {
                 Text(vm.sizeText)
                     .font(.headline)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: Capsule())
-
+                
                 Picker("", selection: $vm.units) {
                     Text("cm").tag(UnitSystem.metric)
                     Text("in").tag(UnitSystem.imperial)
@@ -47,8 +48,16 @@ struct LesionView: View {
         }
         .onAppear {
             vm.start()
+            
         }
         .onDisappear { vm.stop() }
+        .onChange(of: vm.lesion) { draft in
+            guard let lesion = draft else { return }
+            vm.stop()                       // close camera services
+            print("PUSH route with lesion id:", lesion.id)
+            Router.shared.push(.lesionResult(lesion)) // navigate centrally
+            //router.selectedLesion = lesion
+        }
         .toast($vm.toastMessage)
     }
 }
