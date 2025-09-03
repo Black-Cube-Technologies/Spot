@@ -55,7 +55,7 @@ public final class LesionViewModel: ObservableObject {
     private let diameterWindowSize = 5
     private var lastDiameters: [CGFloat] = []
     private var streakAnnounced = false
-    private let confidenceThreshold: Float = 0.85
+    private let confidenceThreshold: Float = 0.6
     
     private var validMeasurementValues = [LesionMeasurement]()
     
