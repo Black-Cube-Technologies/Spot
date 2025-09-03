@@ -85,10 +85,9 @@ public final class LesionViewModel: ObservableObject {
         self.previewLayer = previewLayer
     }
     
-    public func start() { camera.start() }
+    public func start() { camera.start(); resetDraft() }
     public func stop()  {
         camera.stop()
-        resetDraft()
     }
     public func resetDraft(deleteTemp: Bool = false) {
         if deleteTemp, let url = lesion?.imageURL {
