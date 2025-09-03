@@ -30,6 +30,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		83A6A64C2E68797B0082290A /* Exceptions for "Spot" folder in "Spot" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FA5BA70B2E5331E700768C06 /* Spot */;
+		};
 		FAAC0FEA2E5747F9008305BB /* Exceptions for "Spot" folder in "SpotTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -51,6 +58,7 @@
 		FA5BA70E2E5331E700768C06 /* Spot */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				83A6A64C2E68797B0082290A /* Exceptions for "Spot" folder in "Spot" target */,
 				FAAC0FEA2E5747F9008305BB /* Exceptions for "Spot" folder in "SpotTests" target */,
 			);
 			path = Spot;
@@ -421,6 +429,7 @@
 				DEVELOPMENT_TEAM = 7PP84N8J2A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Spot/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "To detect lessions";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -454,6 +463,7 @@
 				DEVELOPMENT_TEAM = 7PP84N8J2A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Spot/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "To detect lessions";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
