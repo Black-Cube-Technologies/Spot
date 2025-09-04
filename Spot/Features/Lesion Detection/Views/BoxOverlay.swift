@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct BoxOverlay: View {
+    let color: Color
     let norm: CGRect   // Vision normalized (origin bottom-left)
 
     var body: some View {
@@ -19,7 +20,7 @@ struct BoxOverlay: View {
                               width: norm.width * w,
                               height: norm.height * h)
             Path { $0.addRect(rect) }
-                .stroke(.red, lineWidth: 3)
+                .stroke(color, lineWidth: 3)
         }
         .allowsHitTesting(false)
     }

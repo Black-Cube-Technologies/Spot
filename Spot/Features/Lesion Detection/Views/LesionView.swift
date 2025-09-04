@@ -27,8 +27,15 @@ struct LesionView: View {
                     }
                 }
             
-            if !vm.boxNorm.isNull {
-                BoxOverlay(norm: vm.boxNorm).ignoresSafeArea()
+            if !vm.boxNorms.isEmpty {
+                ForEach(vm.boxNorms.indices, id: \.self) { index in
+                    let box = vm.boxNorms[index]
+                    BoxOverlay(
+                        color: box.type == .small ? .green : .red,
+                        norm: box.normBox
+                    )
+                    .ignoresSafeArea()
+                }
             }
             
             HStack(spacing: 12) {

@@ -12,5 +12,5 @@ import CoreVideo
 public protocol LesionDetecting: AnyObject {
     /// Async so ViewModel stays simple & testable
     func detect(in pixelBuffer: CVPixelBuffer,
-                orientation: CGImagePropertyOrientation) async -> [VNRecognizedObjectObservation]
+                orientation: CGImagePropertyOrientation) async -> [LesionModel]
 }

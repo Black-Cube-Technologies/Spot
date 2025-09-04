@@ -21,7 +21,7 @@ public final class LesionViewModel: ObservableObject {
     // MARK: Published UI state
     @Published public private(set) var sizeText: String = "—"
     // Updated: boxNorm now means **preview-layer normalized (top-left)** so it matches what you draw.
-    @Published public private(set) var boxNorm: CGRect = .null // Updated semantic
+    @Published public private(set) var boxNorms: [LesionModel] = [] // Updated semantic
     @Published public var units: UnitSystem = .metric
     @Published public var toastMessage:String?
     @Published public var lesion:Lesion?
@@ -55,7 +55,6 @@ public final class LesionViewModel: ObservableObject {
     private let diameterWindowSize = 5
     private var lastDiameters: [CGFloat] = []
     private var streakAnnounced = false
-    private let confidenceThreshold: Float = 0.6
     
     private var validMeasurementValues = [LesionMeasurement]()
     
@@ -122,37 +121,34 @@ public final class LesionViewModel: ObservableObject {
         
         // Detection with correct orientation (see comment above)
         let observations = await detector.detect(in: pb, orientation: visionOrientation) // Updated
-        guard let best = observations.max(by: { $0.confidence < $1.confidence }) else {
+        self.boxNorms.removeAll()
+        for observation in observations {
             
-            return }
-        
-        // Per-frame depth → calibration (if available)
-        if let d = pack.depthData,
-           let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
-                                                         depthData: d,
-                                                         roiNorm: best.boundingBox) {
-            let mmX = emaX.push(depthCal.mmPerPixelX)
-            let mmY = emaY.push(depthCal.mmPerPixelY)
-            calib = PixelCalibration(mmPerPixelX: mmX, mmPerPixelY: mmY)
-        }
-        
-        let m = measurer.measure(from: best, imageSize: imSize, calib: calib, fillRatio: fillRatio)
-        
-        // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-        let previewNorm = layerNormRect(fromVision: best.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
-        
-        await MainActor.run {
-            toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
-            if best.confidence >= confidenceThreshold{
-                self.boxNorm  = previewNorm // Updated: now preview-normalized (top-left)
+            let object = observation.object
+            
+            // Per-frame depth → calibration (if available)
+            if let d = pack.depthData,
+               let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
+                                                             depthData: d,
+                                                             roiNorm: object.boundingBox) {
+                let mmX = emaX.push(depthCal.mmPerPixelX)
+                let mmY = emaY.push(depthCal.mmPerPixelY)
+                calib = PixelCalibration(mmPerPixelX: mmX, mmPerPixelY: mmY)
+            }
+            
+            let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
+            
+            // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
+            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
+            
+            await MainActor.run {
+                toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
+                self.boxNorms.append(observation.copyWith(normBox: previewNorm)) // Updated: now preview-normalized (top-left)
                 self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
                 if let val = self.didAchiveModeValue(m){
+                    // Take Camera Photo Here and Navigate to Next screen
                     captureAndCreateDraft(pack: pack, widthMM: val.0, heightMM: val.1)
-                    //Take Camera Photo Here and Navigate to Next screen
                 }
-            }
-            else{
-                self.boxNorm = .null
             }
         }
     }
@@ -250,7 +246,8 @@ public final class LesionViewModel: ObservableObject {
             self.lesion = Lesion(
                 width: widthMM,
                 height: heightMM,
-                imageURL: fileURL
+                imageURL: fileURL,
+                boundedBoxes: boxNorms.map(\.normBox)
             )
         } catch {
             // Surface to UI (toast/snackbar) as you prefer

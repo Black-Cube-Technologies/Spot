@@ -25,7 +25,7 @@ struct SpotApp: App {
 
     var body: some Scene {
         WindowGroup {
-           RootView()
+            RootView()
         }
         //.modelContainer(sharedModelContainer)
     }
