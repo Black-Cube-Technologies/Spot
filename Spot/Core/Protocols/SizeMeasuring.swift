@@ -9,7 +9,8 @@ import CoreGraphics
 
 public protocol SizeMeasuring {
     func measure(from obs: VNRecognizedObjectObservation,
-                 imageSize: CGSize,
+                 pixelBuffer pb: CVPixelBuffer,
+                 visionOrientation: CGImagePropertyOrientation,
                  calib: PixelCalibration,
                  fillRatio: CGFloat) -> LesionMeasurement
 

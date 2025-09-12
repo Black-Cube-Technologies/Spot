@@ -26,6 +26,12 @@ public final class LesionViewModel: ObservableObject {
     @Published public var toastMessage:String?
     @Published public var lesion:Lesion?
     
+    @Published public private(set) var zoom: CGFloat = 1.0
+    @Published public private(set) var zoomMin: CGFloat = 1.0
+    @Published public private(set) var zoomMax: CGFloat = 5.0
+    
+    private var zoomCtl: CameraZoomControlling?
+    
     // MARK: Dependencies
     private let camera: CameraStreaming
     private let detector: LesionDetecting
@@ -51,9 +57,10 @@ public final class LesionViewModel: ObservableObject {
     // Vision should see them as .up to avoid double-rotation.
     private let visionOrientation: CGImagePropertyOrientation = .up // Updated
     
-    private let diameterThresholdMM: CGFloat = 100
-    private let diameterWindowSize = 5
-    private var lastDiameters: [CGFloat] = []
+    //private let diameterThresholdMM: CGFloat = 2000//100
+    
+    private let nearLimitWindowSize = 5
+    private var lastNearLimitValue: [Bool] = []
     private var streakAnnounced = false
     
     private var validMeasurementValues = [LesionMeasurement]()
@@ -68,6 +75,16 @@ public final class LesionViewModel: ObservableObject {
         self.calibrator = calibrator
         
         // Unified RGB(+Depth) stream
+        if let z = camera as? CameraZoomControlling {
+            self.zoomCtl = z
+            self.zoomMin = z.minZoomFactor
+            self.zoomMax = z.maxZoomFactor
+            z.currentZoom
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] v in self?.zoom = v }
+                .store(in: &bag)
+        }
+        
         camera.frames
             .throttle(for: .milliseconds(120), scheduler: DispatchQueue.global(), latest: true)
             .sink { [weak self] pack in
@@ -118,31 +135,45 @@ public final class LesionViewModel: ObservableObject {
         guard let pb = CMSampleBufferGetImageBuffer(pack.sampleBuffer) else { return }
         let imSize = CGSize(width: CVPixelBufferGetWidth(pb), height: CVPixelBufferGetHeight(pb))
         self.lastImageSize = imSize
-        
+        showInstructionsIfNeeded()
         // Detection with correct orientation (see comment above)
-        let observations = await detector.detect(in: pb, orientation: visionOrientation) // Updated
+        let observations = await detector.detect(in: pb, orientation: currentVisionOrientation()) // Updated
+        
         self.boxNorms.removeAll()
         for observation in observations {
             
+            
+            
+            
             let object = observation.object
+            if let _  = pack.depthData{
+                MeasurementDebugger.run(pixelBuffer: pb,
+                                        depthData: pack.depthData!,
+                                        bbox: object.boundingBox,
+                                        orientation: currentVisionOrientation(),
+                                        zoom: 1,
+                                        label: "Lesion")
+            }
             
             // Per-frame depth → calibration (if available)
             if let d = pack.depthData,
                let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
                                                              depthData: d,
-                                                             roiNorm: object.boundingBox) {
+                                                             roiNorm: object.boundingBox)?.calib {
                 let mmX = emaX.push(depthCal.mmPerPixelX)
                 let mmY = emaY.push(depthCal.mmPerPixelY)
                 calib = PixelCalibration(mmPerPixelX: mmX, mmPerPixelY: mmY)
             }
             
-            let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
+            
+            let m = measurer.measure(from: object, pixelBuffer: pb, visionOrientation: currentVisionOrientation(), calib: calib, fillRatio: fillRatio) 
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
+            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: currentVisionOrientation()) // Added
             
-            await MainActor.run {
-                toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
+            await
+            MainActor.run {
+                //toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
                 self.boxNorms.append(observation.copyWith(normBox: previewNorm)) // Updated: now preview-normalized (top-left)
                 self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
                 if let val = self.didAchiveModeValue(m){
@@ -151,6 +182,16 @@ public final class LesionViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    public func setZoom(_ v: CGFloat, animated: Bool = true) {
+        zoomCtl?.setZoom(v, animated: animated, rate: 10.0)
+    }
+    
+    public func zoomIn(animated: Bool = true) {
+        let target = zoom == zoomMax ? zoomMin : zoomMax
+        setZoom(target, animated: animated)
+        emptyMeasurementValues()
     }
     
     // MARK: - Coordinate conversion
@@ -181,48 +222,50 @@ public final class LesionViewModel: ObservableObject {
                       height: layerRect.height / H)
     }
     
-    private func uiImageOrientation() -> UIImage.Orientation {
-        let vo = previewLayer?.connection?.videoOrientation ?? .portrait
-        // Choose camera position (back by default)
-        let position: AVCaptureDevice.Position = (camera.session.inputs
+   
+    
+    private func currentVisionOrientation() -> CGImagePropertyOrientation {
+        guard let conn = previewLayer?.connection else { return .up }
+        let vo = conn.videoOrientation     // AVCaptureVideoOrientation
+        let pos: AVCaptureDevice.Position = (camera.session.inputs
             .compactMap { $0 as? AVCaptureDeviceInput }
             .first(where: { $0.device.hasMediaType(.video) })?.device.position) ?? .back
-        
-        switch (vo, position) {
-        case (.portrait, .front): return .leftMirrored
-        case (.portrait, _):      return .right
-        case (.portraitUpsideDown, .front): return .rightMirrored
-        case (.portraitUpsideDown, _):      return .left
-        case (.landscapeRight, .front):     return .downMirrored
-        case (.landscapeRight, _):          return .up
-        case (.landscapeLeft, .front):      return .upMirrored
-        case (.landscapeLeft, _):           return .down
-        @unknown default:                   return .right
+
+        switch (vo, pos) {
+        case (.portrait, .front):          return .leftMirrored
+        case (.portrait, _):               return .right
+        case (.portraitUpsideDown, .front):return .rightMirrored
+        case (.portraitUpsideDown, _):     return .left
+        case (.landscapeRight, .front):    return .downMirrored
+        case (.landscapeRight, _):         return .up
+        case (.landscapeLeft, .front):     return .upMirrored
+        case (.landscapeLeft, _):          return .down
+        @unknown default:                  return .up
         }
     }
     
-    
-    @inline(__always)
-    private func pushDiameterAndShouldToast(_ d: CGFloat) -> Bool {
-        lastDiameters.append(d)
-        if lastDiameters.count > diameterWindowSize { lastDiameters = lastDiameters.suffix(diameterWindowSize) }
+    private func showInstructionsIfNeeded() {
+        guard let camera = camera.getCameraDevice() else {return}
+        let isNear = camera.isTooCloseToFocus
         
+        lastNearLimitValue.append(isNear)
+        if lastNearLimitValue.count > nearLimitWindowSize {lastNearLimitValue = lastNearLimitValue.suffix(nearLimitWindowSize)}
         // Only if we have exactly 10 recent values and ALL are > threshold
-        if lastDiameters.count >= diameterWindowSize,
-           lastDiameters.allSatisfy({ $0 > diameterThresholdMM }) {
+        if lastNearLimitValue.count == nearLimitWindowSize,
+           lastNearLimitValue.allSatisfy({ $0 }) {
             //            if !streakAnnounced {
             //                streakAnnounced = true
-            return true           // fire once per streak
+            self.toastMessage =  "Move further away from the lesion"// fire once per streak
             //}
         } else {
             // Any miss or <10 values resets the streak so we can fire again later
-            streakAnnounced = false
+            self.toastMessage = nil
         }
-        return false
     }
     
     private func didAchiveModeValue(_ m: LesionMeasurement) -> (Double,Double)? {
-        if m.equivDiameterMM < diameterThresholdMM {
+        if !(camera.getCameraDevice()?.isTooCloseToFocus ?? true) {
+            //Only add
             validMeasurementValues.append(m)
             print(validMeasurementValues.count)
         }
@@ -234,10 +277,14 @@ public final class LesionViewModel: ObservableObject {
         return nil
     }
     
+    private func emptyMeasurementValues(){
+        validMeasurementValues = []
+    }
+    
     // Call this when your sizing logic decides to capture
     private func captureAndCreateDraft(pack: FramePack,widthMM: Double, heightMM: Double) {
         
-        guard let image = ImageUtility.uiImage(from: pack.sampleBuffer, orientation: uiImageOrientation()) else {return}
+        guard let image = ImageUtility.uiImage(from: pack.sampleBuffer, orientation: .up) else {return}
         
         let id = UUID().uuidString
         do {

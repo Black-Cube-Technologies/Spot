@@ -3,17 +3,17 @@ import CoreML
 import AVFoundation
 
 public final class LesionDetector: LesionDetecting {
-    /*
+    
     public var smallModelRequest: VNCoreMLRequest
-    private let smallThreshold: Float = 0.5
-    */
+    private let smallThreshold: Float = 0.2
+    
     public var largeModelRequest: VNCoreMLRequest
     private let largeThreshold: Float = 0.6 // fixed
     
     public init() {
         do {
             self.largeModelRequest = try Self.loadRequest(filename: LesionConstants.largeMLModelName)
-            //self.smallModelRequest = try Self.loadRequest(filename: LesionConstants.smallMLModelName)
+            self.smallModelRequest = try Self.loadRequest(filename: LesionConstants.smallMLModelName)
         }
         catch {
             fatalError("Failed to initialise Lesion Detector: \(error)")
@@ -42,7 +42,6 @@ public final class LesionDetector: LesionDetecting {
     public func bestDetect(in pixelBuffer: CVPixelBuffer,
                            orientation: CGImagePropertyOrientation = .up) async -> (label: String, conf: Float) {
         let largeResults = await self.detectLarge(in: pixelBuffer, orientation: orientation)
-        print("large Results",largeResults.count)
         guard let largeBest = largeResults.max(by: { $0.confidence > $1.confidence }) else {
             return ("Unknown", 0)
         }
@@ -61,12 +60,12 @@ public final class LesionDetector: LesionDetecting {
             .map({ LesionModel(object: $0, type: .large) })
         let maxLarge = largeResults.max(by: { $0.object.confidence > $1.object.confidence })?.object.confidence ?? 0.0
         
-        /*
-        let smallResults = await self.detectSmall(in: pixelBuffer, orientation: orientation)
-            .map({ LesionModel(object: $0, type: .small) })
-        let maxSmall = smallResults.max(by: { $0.object.confidence > $1.object.confidence })?.object.confidence ?? 0.0
-         */
-        let best = largeResults//maxLarge > maxSmall ? largeResults : smallResults
+        
+//        let smallResults = await self.detectSmall(in: pixelBuffer, orientation: orientation)
+//            .map({ LesionModel(object: $0, type: .small) })
+//        let maxSmall = smallResults.max(by: { $0.object.confidence > $1.object.confidence })?.object.confidence ?? 0.0
+         
+        let best = largeResults // maxLarge > maxSmall ? largeResults : smallResults
         
         // guard with large model lesions, otherewise fallback to small one (pimples, spots etc)
 //        guard !largeResult.isEmpty else {
@@ -79,7 +78,7 @@ public final class LesionDetector: LesionDetecting {
         return best
 //        return finalResults
     }
-    /*
+    
     private func detectSmall(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) async -> [VNRecognizedObjectObservation] {
         
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
@@ -95,7 +94,7 @@ public final class LesionDetector: LesionDetecting {
             return []
         }
     }
-    */
+    
     private func detectLarge(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) async -> [VNRecognizedObjectObservation] {
         
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
@@ -104,7 +103,6 @@ public final class LesionDetector: LesionDetecting {
             let rawResults = (self.largeModelRequest.results as? [VNRecognizedObjectObservation]) ?? []
             let results = rawResults.filter({ $0.confidence >= largeThreshold })
 //            print(results.isEmpty ? "" : "Large Lesion Results: \(results.count)")
-            results.forEach({ print("Large Lesion Confidence: \(String(format: "%.5f", $0.confidence))") })
             return results
         }
         catch {
