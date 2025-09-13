@@ -13,41 +13,66 @@ public enum DepthCalibratorAVF {
 
     public static func calibration(for sampleBuffer: CMSampleBuffer,
                                    depthData inDepth: AVDepthData?,
-                                   roiNorm: CGRect) -> DepthSnapshot? 
-    
-    private static func fxFyForRGB(from depthData: AVDepthData, rgbSize: CGSize) -> (CGFloat, CGFloat)? {
-        guard let cc = depthData.cameraCalibrationData else { return nil }
+                                   roiNorm: CGRect) -> DepthSnapshot? {
+        guard let depthData = inDepth else { return nil }
 
-        let K   = cc.intrinsicMatrix
-        let ref = cc.intrinsicMatrixReferenceDimensions
-        let rw = CGFloat(ref.width),  rh = CGFloat(ref.height)
-        let w  = rgbSize.width,       h  = rgbSize.height
+        // --- 1) Compute ROI in RGB pixels
+        guard let img = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
+        let iw = CGFloat(CVPixelBufferGetWidth(img))
+        let ih = CGFloat(CVPixelBufferGetHeight(img))
+        let roiPx = VNImageRectForNormalizedRect(roiNorm, Int(iw), Int(ih))
 
-        // Reference intrinsics (pixels) in reference space
-        let fxRef = CGFloat(K[0,0])
-        let fyRef = CGFloat(K[1,1])
+        // --- 2) Map ROI into depth map resolution (Float32)
+        let depth = depthData.converting(toDepthDataType: kCVPixelFormatType_DepthFloat32)
+        let dm   = depth.depthDataMap
+        CVPixelBufferLockBaseAddress(dm, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(dm, .readOnly) }
 
-        // Detect 0° vs 90° rotation between reference and RGB by aspect
-        let eps: CGFloat = 0.02
-        let arRef = rw / rh
-        let arRGB = w / h
-        let isRotated90 = abs(arRGB - (rh/rw)) < eps        // matches swapped aspect?
-        // Map "reference frame" dims into the RGB orientation frame
-        let rW = isRotated90 ? rh : rw
-        let rH = isRotated90 ? rw : rh
+        let dw = CGFloat(CVPixelBufferGetWidth(dm))
+        let dh = CGFloat(CVPixelBufferGetHeight(dm))
+        let sx = dw / iw
+        let sy = dh / ih
+        let rD = CGRect(x: roiPx.origin.x * sx,
+                        y: roiPx.origin.y * sy,
+                        width: roiPx.size.width * sx,
+                        height: roiPx.size.height * sy).integral
 
-        // Uniform scale: crop, not anisotropic stretch
-        // If RGB is wider than ref → scale by width; if taller → scale by height.
-        let s: CGFloat = (arRGB >= (rW/rH)) ? (w / rW) : (h / rH)
+        let stride = CVPixelBufferGetBytesPerRow(dm) / MemoryLayout<Float32>.size
+        guard let base = CVPixelBufferGetBaseAddress(dm) else { return nil }
+        let ptr    = base.assumingMemoryBound(to: Float32.self)
 
-        // If rotated, RGB X comes from ref-Y; RGB Y from ref-X. Else X←ref-X, Y←ref-Y.
-        let fx = (isRotated90 ? fyRef : fxRef) * s
-        let fy = (isRotated90 ? fxRef : fyRef) * s
-        
+        // --- 3) Median Z (meters) with sub-sampling for speed
+        var zs: [Float] = []
+        let x0 = max(0, Int(rD.minX)), x1 = min(Int(dw) - 1, Int(rD.maxX))
+        let y0 = max(0, Int(rD.minY)), y1 = min(Int(dh) - 1, Int(rD.maxY))
 
-        guard fx.isFinite && fy.isFinite && fx > 0 && fy > 0 else { return nil }
-        return (fx, fy)
+        var y = y0
+        while y <= y1 {
+            let row = ptr + y * stride
+            var x = x0
+            while x <= x1 {
+                let z = row[x]
+                if z.isFinite && z > 0 { zs.append(z) }
+                x += 2
+            }
+            y += 2
+        }
+        guard let zMedianM = zs.median else { return nil }
+        let zMM = CGFloat(zMedianM * 1000.0)
+
+        // --- 4) Get intrinsics (fx, fy) in **RGB pixel units**
+        guard let (fx, fy) = intrinsicsPixels(sampleBuffer: sampleBuffer,
+                                              depthData: depthData,
+                                              rgbSize: CGSize(width: iw, height: ih)) else {
+            return nil
+        }
+
+        // --- 5) mm/px from Z (pinhole: mmPerPixel = Z(mm) / f(px))
+        let calib = PixelCalibration(mmPerPixelX: zMM / fx,
+                                     mmPerPixelY: zMM / fy)
+        return DepthSnapshot(calib: calib, zMM: zMM)
     }
+  
     
     private static func intrinsicsPixels(sampleBuffer: CMSampleBuffer,
                                          depthData: AVDepthData,

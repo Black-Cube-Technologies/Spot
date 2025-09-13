@@ -27,8 +27,8 @@ public final class LesionViewModel: ObservableObject {
     @Published public var lesion:Lesion?
     
     @Published public private(set) var zoom: CGFloat = 1.0
-    @Published public private(set) var zoomMin: CGFloat = 1.0
-    @Published public private(set) var zoomMax: CGFloat = 5.0
+    public private(set) var zoomMin: CGFloat = 1.0
+    public private(set) var zoomMax: CGFloat = 5.0
     
     private var zoomCtl: CameraZoomControlling?
     
@@ -111,6 +111,7 @@ public final class LesionViewModel: ObservableObject {
         }
         lesion = nil
         self.validMeasurementValues.removeAll()
+        zoom = zoomMin
     }
     
     public func setUnits(_ u: UnitSystem)  { units = u }
@@ -142,31 +143,20 @@ public final class LesionViewModel: ObservableObject {
         self.boxNorms.removeAll()
         for observation in observations {
             
-            
-            
-            
             let object = observation.object
-            if let _  = pack.depthData{
-                MeasurementDebugger.run(pixelBuffer: pb,
-                                        depthData: pack.depthData!,
-                                        bbox: object.boundingBox,
-                                        orientation: currentVisionOrientation(),
-                                        zoom: 1,
-                                        label: "Lesion")
-            }
-            
+            print("Observation: ",object.boundingBox,imSize)
             // Per-frame depth → calibration (if available)
             if let d = pack.depthData,
                let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
                                                              depthData: d,
                                                              roiNorm: object.boundingBox)?.calib {
                 let mmX = emaX.push(depthCal.mmPerPixelX)
-                let mmY = emaY.push(depthCal.mmPerPixelY)
+                 let mmY = emaY.push(depthCal.mmPerPixelY)
                 calib = PixelCalibration(mmPerPixelX: mmX, mmPerPixelY: mmY)
             }
             
             
-            let m = measurer.measure(from: object, pixelBuffer: pb, visionOrientation: currentVisionOrientation(), calib: calib, fillRatio: fillRatio) 
+            let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
             let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: currentVisionOrientation()) // Added
@@ -216,6 +206,11 @@ public final class LesionViewModel: ObservableObject {
         
         // 3) Normalize to [0,1] in layer space for your overlay
         let W = pl.bounds.width, H = pl.bounds.height
+        print("layerNormRect",CGRect(x: layerRect.minX / W,
+                                     y: layerRect.minY / H,
+                                     width: layerRect.width / W,
+                                     height: layerRect.height / H))
+        
         return CGRect(x: layerRect.minX / W,
                       y: layerRect.minY / H,
                       width: layerRect.width / W,

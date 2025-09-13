@@ -44,7 +44,7 @@ final class CameraService: NSObject,
     private func configure() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            self.session.sessionPreset = .hd1920x1080
+            self.session.sessionPreset = .hd1280x720
             
             // Prefer depth-capable back camera
             let device =
@@ -67,7 +67,7 @@ final class CameraService: NSObject,
             
             // Video
             self.videoOutput.alwaysDiscardsLateVideoFrames = true
-            self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String : kCVPixelFormatType_32BGRA]
+            //self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String : kCVPixelFormatType_32BGRA]
             guard self.session.canAddOutput(self.videoOutput) else {
                 self.session.commitConfiguration(); return
             }

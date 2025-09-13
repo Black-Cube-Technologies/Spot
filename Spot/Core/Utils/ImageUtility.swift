@@ -18,6 +18,14 @@ class ImageUtility{
         return UIImage(cgImage: cg, scale: 1.0, orientation: orientation)
     }
     
+    static func uiImage(from pixelBuffer: CVPixelBuffer, orientation: UIImage.Orientation = .up) -> UIImage? {
+        
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext(options: nil)
+        guard let cg = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cg, scale: 1.0, orientation: orientation)
+    }
+    
     
     
     
