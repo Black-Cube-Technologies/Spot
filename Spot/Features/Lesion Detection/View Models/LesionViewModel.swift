@@ -138,7 +138,7 @@ public final class LesionViewModel: ObservableObject {
         self.lastImageSize = imSize
         showInstructionsIfNeeded()
         // Detection with correct orientation (see comment above)
-        let observations = await detector.detect(in: pb, orientation: currentVisionOrientation()) // Updated
+        let observations = await detector.detect(in: pb, orientation: visionOrientation) // Updated
         
         self.boxNorms.removeAll()
         for observation in observations {
@@ -159,7 +159,7 @@ public final class LesionViewModel: ObservableObject {
             let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: currentVisionOrientation()) // Added
+            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
             
             await
             MainActor.run {
@@ -190,54 +190,57 @@ public final class LesionViewModel: ObservableObject {
     private func layerNormRect(fromVision rBL: CGRect,
                                pixelBuffer pb: CVPixelBuffer,
                                visionOrientation o: CGImagePropertyOrientation) -> CGRect {
-        
-        guard let pl = previewLayer, pl.bounds.width > 0, pl.bounds.height > 0 else { return .null }
-        
-        // 1) Vision normalized (bottom-left) -> metadata normalized (top-left)
-        let metaTL = CGRect(
-            x: rBL.minX,
-            y: 1.0 - rBL.maxY,
-            width: rBL.width,
-            height: rBL.height
-        )
-        
-        // 2) Metadata -> layer rect (accounts for aspect fill/fit, clean aperture, rotation, mirroring)
-        let layerRect = pl.layerRectConverted(fromMetadataOutputRect: metaTL)
-        
-        // 3) Normalize to [0,1] in layer space for your overlay
+        guard let pl = previewLayer else { return .null }
         let W = pl.bounds.width, H = pl.bounds.height
-        print("layerNormRect",CGRect(x: layerRect.minX / W,
-                                     y: layerRect.minY / H,
-                                     width: layerRect.width / W,
-                                     height: layerRect.height / H))
-        
+        guard W > 0, H > 0 else { return .null }
+
+        // Pixel buffer dimensions (unrotated)
+        let w0 = CGFloat(CVPixelBufferGetWidth(pb))
+        let h0 = CGFloat(CVPixelBufferGetHeight(pb))
+
+        // Vision bbox is in the oriented image space:
+        // swap width/height when orientation rotates 90°.
+        let rotates90: Bool = {
+            switch o {
+            case .left, .right, .leftMirrored, .rightMirrored: return true
+            default: return false
+            }
+        }()
+        let w = rotates90 ? h0 : w0
+        let h = rotates90 ? w0 : h0
+        guard w > 0, h > 0 else { return .null }
+
+        // Vision (bottom-left) → top-left
+        let rTL = CGRect(x: rBL.minX,
+                         y: 1.0 - rBL.maxY,
+                         width: rBL.width,
+                         height: rBL.height)
+
+        // Image-space (px) in *Vision's oriented image*
+        let imgRect = CGRect(x: rTL.minX * w,
+                             y: rTL.minY * h,
+                             width:  rTL.width  * w,
+                             height: rTL.height * h)
+
+        // Map oriented image (w×h) → preview layer (W×H) using aspectFill
+        let scale  = max(W / w, H / h)
+        let scaledW = w * scale
+        let scaledH = h * scale
+        let tx = (W - scaledW) * 0.5
+        let ty = (H - scaledH) * 0.5
+
+        let layerRect = CGRect(x: imgRect.minX * scale + tx,
+                               y: imgRect.minY * scale + ty,
+                               width:  imgRect.width  * scale,
+                               height: imgRect.height * scale)
+
+        // Normalize to [0,1] in layer space
         return CGRect(x: layerRect.minX / W,
                       y: layerRect.minY / H,
-                      width: layerRect.width / W,
+                      width:  layerRect.width  / W,
                       height: layerRect.height / H)
     }
     
-   
-    
-    private func currentVisionOrientation() -> CGImagePropertyOrientation {
-        guard let conn = previewLayer?.connection else { return .up }
-        let vo = conn.videoOrientation     // AVCaptureVideoOrientation
-        let pos: AVCaptureDevice.Position = (camera.session.inputs
-            .compactMap { $0 as? AVCaptureDeviceInput }
-            .first(where: { $0.device.hasMediaType(.video) })?.device.position) ?? .back
-
-        switch (vo, pos) {
-        case (.portrait, .front):          return .leftMirrored
-        case (.portrait, _):               return .right
-        case (.portraitUpsideDown, .front):return .rightMirrored
-        case (.portraitUpsideDown, _):     return .left
-        case (.landscapeRight, .front):    return .downMirrored
-        case (.landscapeRight, _):         return .up
-        case (.landscapeLeft, .front):     return .upMirrored
-        case (.landscapeLeft, _):          return .down
-        @unknown default:                  return .up
-        }
-    }
     
     private func showInstructionsIfNeeded() {
         guard let camera = camera.getCameraDevice() else {return}

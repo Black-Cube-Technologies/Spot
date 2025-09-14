@@ -48,12 +48,11 @@ final class CameraService: NSObject,
             
             // Prefer depth-capable back camera
             let device =
-           // AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) ??
-            AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back) ??
-            // AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) ??
-            AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back)
-            //device?.formats.first(where: {$0.supportedDepthDataFormats})
-            
+                       //AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) ??
+                       AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back) ??
+                       AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back) ??
+                       AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+
             guard let videoDevice = device,
                   let input = try? AVCaptureDeviceInput(device: videoDevice),
                   self.session.canAddInput(input) else {
@@ -67,7 +66,7 @@ final class CameraService: NSObject,
             
             // Video
             self.videoOutput.alwaysDiscardsLateVideoFrames = true
-            //self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String : kCVPixelFormatType_32BGRA]
+            self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String : kCVPixelFormatType_32BGRA]
             guard self.session.canAddOutput(self.videoOutput) else {
                 self.session.commitConfiguration(); return
             }
@@ -75,8 +74,7 @@ final class CameraService: NSObject,
             
             if let c = self.videoOutput.connection(with: .video) {
                 if c.isCameraIntrinsicMatrixDeliverySupported { c.isCameraIntrinsicMatrixDeliveryEnabled = true }
-                if c.isVideoStabilizationSupported { c.preferredVideoStabilizationMode = .standard }
-                c.videoOrientation = .portrait
+                if #available(iOS 17.0, *) { c.videoRotationAngle = 90 } else { c.videoOrientation = .portrait }
             }
             
             // Depth (try; fall back to RGB-only if not supported)
