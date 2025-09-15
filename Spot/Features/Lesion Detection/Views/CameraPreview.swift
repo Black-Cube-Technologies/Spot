@@ -9,10 +9,7 @@ struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
         v.videoPreviewLayer.session = session
-        v.videoPreviewLayer.videoGravity = .resizeAspect
-
-       // v.videoPreviewLayer.connection?.videoOrientation = .portrait
-        // Defer state mutation to avoid the warning
+        v.videoPreviewLayer.videoGravity = .resizeAspect 
         
         DispatchQueue.main.async {
             self.previewLayer = v.videoPreviewLayer
