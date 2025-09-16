@@ -65,6 +65,8 @@ public final class LesionViewModel: ObservableObject {
     
     private var validMeasurementValues = [LesionMeasurement]()
     
+    private var enforceCircularMask = true
+    
     public init(camera: CameraStreaming,
                 detector: LesionDetecting,
                 measurer: SizeMeasuring = MeasurementService(),
@@ -137,14 +139,28 @@ public final class LesionViewModel: ObservableObject {
         let imSize = CGSize(width: CVPixelBufferGetWidth(pb), height: CVPixelBufferGetHeight(pb))
         self.lastImageSize = imSize
         showInstructionsIfNeeded()
-        // Detection with correct orientation (see comment above)
-        let observations = await detector.detect(in: pb, orientation: visionOrientation) // Updated
+        
+        let pbForDetection: CVPixelBuffer
+        if enforceCircularMask, let masked = ImageUtility.makeCircularMaskedPixelBuffer(
+            from: pb,
+            previewSize: previewLayer!.bounds.size,
+            gravity: previewLayer!.videoGravity,        // usually .resizeAspectFill
+            diameterFractionInPreview: DetectionConstants.roiFraction,      // your 0..1 UI slider / constant
+            centerInPreview01: CGPoint(x: 0.5, y: 0.5)
+        ) {
+            pbForDetection = masked
+        } else {
+            pbForDetection = pb
+        }
+        
+        let observations = await detector.detect(in: pbForDetection, orientation: visionOrientation) // Updated
         
         self.boxNorms.removeAll()
         for observation in observations {
             
             let object = observation.object
-            print("Observation: ",object.boundingBox,imSize)
+            let lesionBL = object.boundingBox
+            print("observations",lesionBL)
             // Per-frame depth → calibration (if available)
             if let d = pack.depthData,
                let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
@@ -159,7 +175,7 @@ public final class LesionViewModel: ObservableObject {
             let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
+            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pbForDetection, visionOrientation: visionOrientation) // Added
             
             await
             MainActor.run {
@@ -168,7 +184,10 @@ public final class LesionViewModel: ObservableObject {
                 self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
                 if let val = self.didAchiveModeValue(m){
                     // Take Camera Photo Here and Navigate to Next screen
-                    captureAndCreateDraft(pack: pack, widthMM: val.0, heightMM: val.1)
+                    captureAndCreateDraft(pixelBuffer: pb,
+                                                  widthMM: val.0,
+                                                  heightMM: val.1,
+                                                  lesionRectBL: lesionBL)
                 }
             }
         }
@@ -280,23 +299,28 @@ public final class LesionViewModel: ObservableObject {
     }
     
     // Call this when your sizing logic decides to capture
-    private func captureAndCreateDraft(pack: FramePack,widthMM: Double, heightMM: Double) {
-        
-        guard let image = ImageUtility.uiImage(from: pack.sampleBuffer, orientation: .up) else {return}
-        
+    private func captureAndCreateDraft(pixelBuffer: CVPixelBuffer,
+                                       widthMM: Double,
+                                       heightMM: Double,
+                                       lesionRectBL: CGRect) { // <— NEW param (Vision's normalized BL rect)
+        guard let fullImage = ImageUtility.uiImage(from: pixelBuffer, orientation: visionOrientation) else { return }
+
+        // Crop to the lesion (tight rectangle)
+        let cropped = ImageUtility.cropUIImage(fullImage, toNormalizedBL: lesionRectBL) ?? fullImage
+
         let id = UUID().uuidString
         do {
-            let fileURL = try LocalTempImageStore().saveTempJPEG(image, id: id, quality: 0.92)
+            let fileURL = try LocalTempImageStore().saveTempJPEG(cropped, id: id, quality: 0.92)
             guard lesion == nil else { return }
             self.lesion = Lesion(
-                width: widthMM,
+                width:  widthMM,
                 height: heightMM,
                 imageURL: fileURL,
-                boundedBoxes: boxNorms.map(\.normBox)
+                boundedBoxes: boxNorms.map(\.normBox) // keep if you still overlay later
             )
         } catch {
-            // Surface to UI (toast/snackbar) as you prefer
             print("Saving temp image failed: \(error)")
         }
     }
+
 }

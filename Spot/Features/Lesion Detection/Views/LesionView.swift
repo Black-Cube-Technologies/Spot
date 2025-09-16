@@ -26,7 +26,7 @@ struct LesionView: View {
         ZStack(alignment: .bottom) {
             
             // Camera + pinch (no preset taps)
-            CameraPreview(session: vm.session, vm: vm, previewLayer: $previewLayer)
+            CircularCameraPreview(vm: vm)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .gesture(

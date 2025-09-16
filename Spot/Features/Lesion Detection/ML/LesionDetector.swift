@@ -31,9 +31,6 @@ public final class LesionDetector: LesionDetecting {
         let model = try VNCoreMLModel(for: file)
         
         let request = VNCoreMLRequest(model: model)
-        
-        request.imageCropAndScaleOption = .centerCrop
-        
         request.preferBackgroundProcessing = true
         
         return request
@@ -109,4 +106,6 @@ public final class LesionDetector: LesionDetecting {
             return []
         }
     }
+    
+    
 }
