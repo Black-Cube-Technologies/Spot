@@ -61,10 +61,15 @@ struct LesionView: View {
                     .ignoresSafeArea()
                 }
             }
-            // Bottom HUD: size/units + single zoom button
+            // Bottom HUD: size/units + three zoom presets
             VStack(spacing: 14) {
                 
-                zoomButton
+                // Three zoom presets: 1× (2.0), 2× (6.0), 3× (10.0)
+                HStack(spacing: 12) {
+                    zoomPresetButton(title: "1×", targetZoom: 2.0) { vm.setPresetZoom1x() }
+                    zoomPresetButton(title: "2×", targetZoom: 6.0) { vm.setPresetZoom2x() }
+                    zoomPresetButton(title: "3×", targetZoom: 10.0) { vm.setPresetZoom3x() }
+                }
                 
                 HStack(spacing: 12) {
                     Text(vm.sizeText)
@@ -92,22 +97,36 @@ struct LesionView: View {
         .toast($vm.toastMessage)
     }
     
-    // MARK: - Single Zoom Button
-    private var zoomButton: some View {
-        // Build without Button() to control tap vs long-press precisely
-        let tap = TapGesture().onEnded {
-            vm.zoomIn(animated: true)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    // MARK: - Zoom Preset Button Helper
+    private func zoomPresetButton(title: String, targetZoom: CGFloat, action: @escaping () -> Void) -> some View {
+        let selected = isZoomSelected(targetZoom)
+        return Button(action: {
+            action()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showZoomOverlay(); scheduleHideZoomOverlay()
+        }) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(selected ? Color.black : Color.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
-        
-        return Image(systemName: vm.zoom == vm.zoomMax ? "minus.magnifyingglass" : "plus.magnifyingglass")
-            .font(.system(size: 16, weight: .semibold))
-            .padding()
-            .contentShape(Rectangle())
-            .background(.ultraThinMaterial, in: Capsule())
-            .gesture(tap)
-        
+        .buttonStyle(.plain)
+        .background(
+            Circle()
+                .fill(selected ? Color.white : Color.white.opacity(0.15))
+        )
+        .overlay(
+            Circle()
+                .stroke(Color.white.opacity(selected ? 0.0 : 0.6), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(selected ? 0.25 : 0.0), radius: selected ? 6 : 0, x: 0, y: 2)
+        .accessibilityLabel(Text("Zoom \(title)"))
+    }
+    
+    private func isZoomSelected(_ target: CGFloat) -> Bool {
+        // Allow a small tolerance because device zoom may clamp/ramp
+        abs(vm.zoom - target) < 0.35
     }
     
     // MARK: HUD helpers
@@ -135,3 +154,4 @@ struct LesionView: View {
     }
     private func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { max(lo, min(v, hi)) }
 }
+

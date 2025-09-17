@@ -147,6 +147,10 @@ final class CameraService: NSObject,
     public func setZoom(_ factor: CGFloat, animated: Bool = true, rate: Float = 8.0) {
         sessionQueue.async { self._setZoomUnsafe(factor, animated: animated, rate: rate) }
     }
+    // Convenience presets used by LesionView/LesionViewModel
+    public func setPresetZoom1x(animated: Bool = true) { setZoom(2.0, animated: animated, rate: 10.0) }
+    public func setPresetZoom2x(animated: Bool = true) { setZoom(6.0, animated: animated, rate: 10.0) }
+    public func setPresetZoom3x(animated: Bool = true) { setZoom(10.0, animated: animated, rate: 10.0) }
 
     public func cancelZoomRamp() {
         sessionQueue.async {

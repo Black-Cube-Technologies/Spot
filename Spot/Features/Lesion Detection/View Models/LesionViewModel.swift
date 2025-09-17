@@ -63,7 +63,8 @@ public final class LesionViewModel: ObservableObject {
     private var lastNearLimitValue: [Bool] = []
     private var streakAnnounced = false
     
-    private var validMeasurementValues = [LesionMeasurement]()
+    @Published var validMeasurementValues = [LesionMeasurement]()
+    var requiredValidMeasurements = 20
     
     private var enforceCircularMask = true
     
@@ -103,7 +104,12 @@ public final class LesionViewModel: ObservableObject {
         self.previewLayer = previewLayer
     }
     
-    public func start() { camera.start(); resetDraft() }
+    public func start() {
+        camera.start()
+        resetDraft()
+        // Default to 1× (maps to 2.0) on launch
+        setPresetZoom1x(animated: false)
+    }
     public func stop()  {
         camera.stop()
     }
@@ -175,12 +181,12 @@ public final class LesionViewModel: ObservableObject {
             let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pbForDetection, visionOrientation: visionOrientation) // Added
+            //let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pbForDetection, visionOrientation: visionOrientation) // Added
             
             await
             MainActor.run {
                 //toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
-                self.boxNorms.append(observation.copyWith(normBox: previewNorm)) // Updated: now preview-normalized (top-left)
+                //self.boxNorms.append(observation.copyWith(normBox: previewNorm)) // Updated: now preview-normalized (top-left)
                 self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
                 if let val = self.didAchiveModeValue(m){
                     // Take Camera Photo Here and Navigate to Next screen
@@ -195,6 +201,19 @@ public final class LesionViewModel: ObservableObject {
     
     public func setZoom(_ v: CGFloat, animated: Bool = true) {
         zoomCtl?.setZoom(v, animated: animated, rate: 10.0)
+    }
+    // MARK: - Preset Zooms (maps to 2.0x, 6.0x, 10.0 digital zoom)
+    public func setPresetZoom1x(animated: Bool = true) {
+        setZoom(2.0, animated: animated)
+        emptyMeasurementValues()
+    }
+    public func setPresetZoom2x(animated: Bool = true) {
+        setZoom(6.0, animated: animated)
+        emptyMeasurementValues()
+    }
+    public func setPresetZoom3x(animated: Bool = true) {
+        setZoom(10.0, animated: animated)
+        emptyMeasurementValues()
     }
     
     public func zoomIn(animated: Bool = true) {
@@ -286,7 +305,7 @@ public final class LesionViewModel: ObservableObject {
             validMeasurementValues.append(m)
             print(validMeasurementValues.count)
         }
-        if validMeasurementValues.count >= 25{
+        if validMeasurementValues.count >= requiredValidMeasurements{
             let w = validMeasurementValues.widthMode()?.value ?? 0
             let h = validMeasurementValues.heightMode()?.value ?? 0
             return (w,h)
