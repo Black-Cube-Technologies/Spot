@@ -14,6 +14,7 @@ public protocol CameraStreaming: AnyObject {
     var session: AVCaptureSession { get }
     func start()
     func stop()
+    func getCameraDevice() -> AVCaptureDevice?
 }
 
 public struct FramePack { // Added

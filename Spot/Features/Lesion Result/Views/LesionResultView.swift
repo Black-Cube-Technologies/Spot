@@ -28,16 +28,17 @@ public struct LesionResultView: View {
                 Group {
                     if let image = vm.image {
                         Image(uiImage: image)
+                           
                             .resizable()
-                            .scaledToFit()
+                            .aspectRatio(contentMode: .fill)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .shadow(radius: 4)
-                            .overlay {
-                                ForEach(vm.lesion.boundedBoxes.indices, id: \.self) { index in
-                                    let box = vm.lesion.boundedBoxes[index]
-                                    BoxOverlay(color: Color.red, norm: box)
-                                }
-                            }
+//                            .overlay {
+//                                ForEach(vm.lesion.boundedBoxes.indices, id: \.self) { index in
+//                                    let box = vm.lesion.boundedBoxes[index]
+//                                    BoxOverlay(color: Color.red, norm: box)
+//                                }
+//                            }
                     } else {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14)
