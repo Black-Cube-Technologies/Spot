@@ -54,7 +54,8 @@ public final class LesionResultViewModel: ObservableObject {
     
     // MARK: - Private
     private func loadImageFromDisk() {
-        image = UIImage(contentsOfFile: lesion.imageURL.path)
+        image = UIImage(contentsOfFile: lesion.imageURL.path)?.normalizedUp()
+        
     }
     
     private func formatLength(_ mm: Double) -> String {

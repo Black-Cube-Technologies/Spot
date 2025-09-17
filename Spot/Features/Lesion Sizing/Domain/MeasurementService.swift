@@ -54,4 +54,6 @@ public final class MeasurementService: SizeMeasuring {
             return "≈ \(f(mmToIn(m.widthMM))) × \(f(mmToIn(m.heightMM))) in • \(f(mm2ToIN2(m.areaMM2))) in² • d≈\(f(mmToIn(m.equivDiameterMM))) in"
         }
     }
+    
+    
 }

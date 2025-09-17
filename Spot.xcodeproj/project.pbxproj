@@ -33,6 +33,9 @@
 		83A6A64C2E68797B0082290A /* Exceptions for "Spot" folder in "Spot" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Features/Lesion Detection/ML/Lesion Detection 4 Iteration 29240.mlmodel",
+				"Features/Lesion Detection/ML/Lesion_Detection_V2.mlmodel",
+				"Features/Lesion Detection/ML/Lesion_Detection_V3.mlmodel",
 				Info.plist,
 			);
 			target = FA5BA70B2E5331E700768C06 /* Spot */;
@@ -43,9 +46,11 @@
 				Core/Constants/Constants.swift,
 				Core/Protocols/CalibrationProviding.swift,
 				Core/Protocols/CameraStreaming.swift,
+				Core/Protocols/CameraZoomControlling.swift,
 				Core/Protocols/LesionDetecting.swift,
 				Core/Protocols/SizeMeasuring.swift,
-				"Features/Lesion Detection/ML/Lesion_Detection_V2.mlmodel",
+				"Features/Lesion Detection/ML/Lesion Detector 1 Iteration 44500.mlmodel",
+				"Features/Lesion Detection/ML/Lesion_Detection_V4.mlmodel",
 				"Features/Lesion Detection/ML/LesionDetector.swift",
 				"Features/Lesion Sizing/Domain/Entities/Lesion.swift",
 				"Features/Lesion Sizing/Domain/Entities/Types.swift",

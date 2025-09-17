@@ -26,6 +26,12 @@ public final class LesionViewModel: ObservableObject {
     @Published public var toastMessage:String?
     @Published public var lesion:Lesion?
     
+    @Published public private(set) var zoom: CGFloat = 1.0
+    public private(set) var zoomMin: CGFloat = 1.0
+    public private(set) var zoomMax: CGFloat = 5.0
+    
+    private var zoomCtl: CameraZoomControlling?
+    
     // MARK: Dependencies
     private let camera: CameraStreaming
     private let detector: LesionDetecting
@@ -51,12 +57,15 @@ public final class LesionViewModel: ObservableObject {
     // Vision should see them as .up to avoid double-rotation.
     private let visionOrientation: CGImagePropertyOrientation = .up // Updated
     
-    private let diameterThresholdMM: CGFloat = 100
-    private let diameterWindowSize = 5
-    private var lastDiameters: [CGFloat] = []
+    //private let diameterThresholdMM: CGFloat = 2000//100
+    
+    private let nearLimitWindowSize = 5
+    private var lastNearLimitValue: [Bool] = []
     private var streakAnnounced = false
     
     private var validMeasurementValues = [LesionMeasurement]()
+    
+    private var enforceCircularMask = true
     
     public init(camera: CameraStreaming,
                 detector: LesionDetecting,
@@ -68,6 +77,16 @@ public final class LesionViewModel: ObservableObject {
         self.calibrator = calibrator
         
         // Unified RGB(+Depth) stream
+        if let z = camera as? CameraZoomControlling {
+            self.zoomCtl = z
+            self.zoomMin = z.minZoomFactor
+            self.zoomMax = z.maxZoomFactor
+            z.currentZoom
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] v in self?.zoom = v }
+                .store(in: &bag)
+        }
+        
         camera.frames
             .throttle(for: .milliseconds(120), scheduler: DispatchQueue.global(), latest: true)
             .sink { [weak self] pack in
@@ -94,6 +113,7 @@ public final class LesionViewModel: ObservableObject {
         }
         lesion = nil
         self.validMeasurementValues.removeAll()
+        zoom = zoomMin
     }
     
     public func setUnits(_ u: UnitSystem)  { units = u }
@@ -118,39 +138,69 @@ public final class LesionViewModel: ObservableObject {
         guard let pb = CMSampleBufferGetImageBuffer(pack.sampleBuffer) else { return }
         let imSize = CGSize(width: CVPixelBufferGetWidth(pb), height: CVPixelBufferGetHeight(pb))
         self.lastImageSize = imSize
+        showInstructionsIfNeeded()
         
-        // Detection with correct orientation (see comment above)
-        let observations = await detector.detect(in: pb, orientation: visionOrientation) // Updated
+        let pbForDetection: CVPixelBuffer
+        if enforceCircularMask, let masked = ImageUtility.makeCircularMaskedPixelBuffer(
+            from: pb,
+            previewSize: previewLayer!.bounds.size,
+            gravity: previewLayer!.videoGravity,        // usually .resizeAspectFill
+            diameterFractionInPreview: DetectionConstants.roiFraction,      // your 0..1 UI slider / constant
+            centerInPreview01: CGPoint(x: 0.5, y: 0.5)
+        ) {
+            pbForDetection = masked
+        } else {
+            pbForDetection = pb
+        }
+        
+        let observations = await detector.detect(in: pbForDetection, orientation: visionOrientation) // Updated
+        
         self.boxNorms.removeAll()
         for observation in observations {
             
             let object = observation.object
-            
+            let lesionBL = object.boundingBox
+            print("observations",lesionBL)
             // Per-frame depth → calibration (if available)
             if let d = pack.depthData,
                let depthCal = DepthCalibratorAVF.calibration(for: pack.sampleBuffer,
                                                              depthData: d,
-                                                             roiNorm: object.boundingBox) {
+                                                             roiNorm: object.boundingBox)?.calib {
                 let mmX = emaX.push(depthCal.mmPerPixelX)
-                let mmY = emaY.push(depthCal.mmPerPixelY)
+                 let mmY = emaY.push(depthCal.mmPerPixelY)
                 calib = PixelCalibration(mmPerPixelX: mmX, mmPerPixelY: mmY)
             }
+            
             
             let m = measurer.measure(from: object, imageSize: imSize, calib: calib, fillRatio: fillRatio)
             
             // Convert Vision bbox → preview-layer normalized (top-left) so overlay aligns under any gravity/crop.
-            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pb, visionOrientation: visionOrientation) // Added
+            let previewNorm = layerNormRect(fromVision: object.boundingBox, pixelBuffer: pbForDetection, visionOrientation: visionOrientation) // Added
             
-            await MainActor.run {
-                toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
+            await
+            MainActor.run {
+                //toastMessage =  pushDiameterAndShouldToast(m.equivDiameterMM) ? "Move further away" : nil
                 self.boxNorms.append(observation.copyWith(normBox: previewNorm)) // Updated: now preview-normalized (top-left)
                 self.sizeText = self.measurer.format(m, units: self.units, decimals: 1)
                 if let val = self.didAchiveModeValue(m){
                     // Take Camera Photo Here and Navigate to Next screen
-                    captureAndCreateDraft(pack: pack, widthMM: val.0, heightMM: val.1)
+                    captureAndCreateDraft(pixelBuffer: pb,
+                                                  widthMM: val.0,
+                                                  heightMM: val.1,
+                                                  lesionRectBL: lesionBL)
                 }
             }
         }
+    }
+    
+    public func setZoom(_ v: CGFloat, animated: Bool = true) {
+        zoomCtl?.setZoom(v, animated: animated, rate: 10.0)
+    }
+    
+    public func zoomIn(animated: Bool = true) {
+        let target = zoom == zoomMax ? zoomMin : zoomMax
+        setZoom(target, animated: animated)
+        emptyMeasurementValues()
     }
     
     // MARK: - Coordinate conversion
@@ -159,70 +209,80 @@ public final class LesionViewModel: ObservableObject {
     private func layerNormRect(fromVision rBL: CGRect,
                                pixelBuffer pb: CVPixelBuffer,
                                visionOrientation o: CGImagePropertyOrientation) -> CGRect {
-        
-        guard let pl = previewLayer, pl.bounds.width > 0, pl.bounds.height > 0 else { return .null }
-        
-        // 1) Vision normalized (bottom-left) -> metadata normalized (top-left)
-        let metaTL = CGRect(
-            x: rBL.minX,
-            y: 1.0 - rBL.maxY,
-            width: rBL.width,
-            height: rBL.height
-        )
-        
-        // 2) Metadata -> layer rect (accounts for aspect fill/fit, clean aperture, rotation, mirroring)
-        let layerRect = pl.layerRectConverted(fromMetadataOutputRect: metaTL)
-        
-        // 3) Normalize to [0,1] in layer space for your overlay
+        guard let pl = previewLayer else { return .null }
         let W = pl.bounds.width, H = pl.bounds.height
+        guard W > 0, H > 0 else { return .null }
+
+        // Pixel buffer dimensions (unrotated)
+        let w0 = CGFloat(CVPixelBufferGetWidth(pb))
+        let h0 = CGFloat(CVPixelBufferGetHeight(pb))
+
+        // Vision bbox is in the oriented image space:
+        // swap width/height when orientation rotates 90°.
+        let rotates90: Bool = {
+            switch o {
+            case .left, .right, .leftMirrored, .rightMirrored: return true
+            default: return false
+            }
+        }()
+        let w = rotates90 ? h0 : w0
+        let h = rotates90 ? w0 : h0
+        guard w > 0, h > 0 else { return .null }
+
+        // Vision (bottom-left) → top-left
+        let rTL = CGRect(x: rBL.minX,
+                         y: 1.0 - rBL.maxY,
+                         width: rBL.width,
+                         height: rBL.height)
+
+        // Image-space (px) in *Vision's oriented image*
+        let imgRect = CGRect(x: rTL.minX * w,
+                             y: rTL.minY * h,
+                             width:  rTL.width  * w,
+                             height: rTL.height * h)
+
+        // Map oriented image (w×h) → preview layer (W×H) using aspectFill
+        let scale  = max(W / w, H / h)
+        let scaledW = w * scale
+        let scaledH = h * scale
+        let tx = (W - scaledW) * 0.5
+        let ty = (H - scaledH) * 0.5
+
+        let layerRect = CGRect(x: imgRect.minX * scale + tx,
+                               y: imgRect.minY * scale + ty,
+                               width:  imgRect.width  * scale,
+                               height: imgRect.height * scale)
+
+        // Normalize to [0,1] in layer space
         return CGRect(x: layerRect.minX / W,
                       y: layerRect.minY / H,
-                      width: layerRect.width / W,
+                      width:  layerRect.width  / W,
                       height: layerRect.height / H)
     }
     
-    private func uiImageOrientation() -> UIImage.Orientation {
-        let vo = previewLayer?.connection?.videoOrientation ?? .portrait
-        // Choose camera position (back by default)
-        let position: AVCaptureDevice.Position = (camera.session.inputs
-            .compactMap { $0 as? AVCaptureDeviceInput }
-            .first(where: { $0.device.hasMediaType(.video) })?.device.position) ?? .back
-        
-        switch (vo, position) {
-        case (.portrait, .front): return .leftMirrored
-        case (.portrait, _):      return .right
-        case (.portraitUpsideDown, .front): return .rightMirrored
-        case (.portraitUpsideDown, _):      return .left
-        case (.landscapeRight, .front):     return .downMirrored
-        case (.landscapeRight, _):          return .up
-        case (.landscapeLeft, .front):      return .upMirrored
-        case (.landscapeLeft, _):           return .down
-        @unknown default:                   return .right
-        }
-    }
     
-    
-    @inline(__always)
-    private func pushDiameterAndShouldToast(_ d: CGFloat) -> Bool {
-        lastDiameters.append(d)
-        if lastDiameters.count > diameterWindowSize { lastDiameters = lastDiameters.suffix(diameterWindowSize) }
+    private func showInstructionsIfNeeded() {
+        guard let camera = camera.getCameraDevice() else {return}
+        let isNear = camera.isTooCloseToFocus
         
+        lastNearLimitValue.append(isNear)
+        if lastNearLimitValue.count > nearLimitWindowSize {lastNearLimitValue = lastNearLimitValue.suffix(nearLimitWindowSize)}
         // Only if we have exactly 10 recent values and ALL are > threshold
-        if lastDiameters.count >= diameterWindowSize,
-           lastDiameters.allSatisfy({ $0 > diameterThresholdMM }) {
+        if lastNearLimitValue.count == nearLimitWindowSize,
+           lastNearLimitValue.allSatisfy({ $0 }) {
             //            if !streakAnnounced {
             //                streakAnnounced = true
-            return true           // fire once per streak
+            self.toastMessage =  "Move further away from the lesion"// fire once per streak
             //}
         } else {
             // Any miss or <10 values resets the streak so we can fire again later
-            streakAnnounced = false
+            self.toastMessage = nil
         }
-        return false
     }
     
     private func didAchiveModeValue(_ m: LesionMeasurement) -> (Double,Double)? {
-        if m.equivDiameterMM < diameterThresholdMM {
+        if !(camera.getCameraDevice()?.isTooCloseToFocus ?? true) {
+            //Only add
             validMeasurementValues.append(m)
             print(validMeasurementValues.count)
         }
@@ -234,24 +294,33 @@ public final class LesionViewModel: ObservableObject {
         return nil
     }
     
+    private func emptyMeasurementValues(){
+        validMeasurementValues = []
+    }
+    
     // Call this when your sizing logic decides to capture
-    private func captureAndCreateDraft(pack: FramePack,widthMM: Double, heightMM: Double) {
-        
-        guard let image = ImageUtility.uiImage(from: pack.sampleBuffer, orientation: uiImageOrientation()) else {return}
-        
+    private func captureAndCreateDraft(pixelBuffer: CVPixelBuffer,
+                                       widthMM: Double,
+                                       heightMM: Double,
+                                       lesionRectBL: CGRect) { // <— NEW param (Vision's normalized BL rect)
+        guard let fullImage = ImageUtility.uiImage(from: pixelBuffer, orientation: visionOrientation) else { return }
+
+        // Crop to the lesion (tight rectangle)
+        let cropped = ImageUtility.cropUIImage(fullImage, toNormalizedBL: lesionRectBL) ?? fullImage
+
         let id = UUID().uuidString
         do {
-            let fileURL = try LocalTempImageStore().saveTempJPEG(image, id: id, quality: 0.92)
+            let fileURL = try LocalTempImageStore().saveTempJPEG(cropped, id: id, quality: 0.92)
             guard lesion == nil else { return }
             self.lesion = Lesion(
-                width: widthMM,
+                width:  widthMM,
                 height: heightMM,
                 imageURL: fileURL,
-                boundedBoxes: boxNorms.map(\.normBox)
+                boundedBoxes: boxNorms.map(\.normBox) // keep if you still overlay later
             )
         } catch {
-            // Surface to UI (toast/snackbar) as you prefer
             print("Saving temp image failed: \(error)")
         }
     }
+
 }

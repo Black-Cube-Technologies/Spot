@@ -47,7 +47,7 @@ public final class LocalTempImageStore: TempImageStoring {
     }
 
     public func saveTempJPEG(_ image: UIImage, id: String = UUID().uuidString, quality: CGFloat = 0.9) throws -> URL {
-        guard let data = image.jpegData(compressionQuality: quality) else {
+        guard let data = image.normalizedUp().jpegData(compressionQuality: quality) else {
             throw StoreError.jpegEncodingFailed
         }
         let url = directory.appendingPathComponent("\(id).jpg", conformingTo: .jpeg)
