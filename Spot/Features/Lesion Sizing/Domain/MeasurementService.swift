@@ -30,7 +30,12 @@ public final class MeasurementService: SizeMeasuring {
         let widthMM  = boxWmm * s
         let heightMM = boxHmm * s
         let areaMM2  = (boxWmm * boxHmm) * max(fillRatio, 0)
-        let dmm      = (4.0 * areaMM2 / .pi).squareRoot()
+
+        // Use inscribed circle of the bbox for a more robust equivalent diameter on small, circular lesions.
+        // Compute diameter in pixels as the smaller side of the pixel rect, then convert using geometric mean of mm/px.
+        let dPx = min(pr.width, pr.height)
+        let mmPerPxForD = sqrt(max(calib.mmPerPixelX, 0) * max(calib.mmPerPixelY, 0))
+        let dmm = dPx * mmPerPxForD
 
         return .init(bboxNorm: obs.boundingBox,
                      pixelRect: pr,

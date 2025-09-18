@@ -8,7 +8,7 @@ public final class LesionDetector: LesionDetecting {
     private let smallThreshold: Float = 0.2
     
     public var largeModelRequest: VNCoreMLRequest
-    private let largeThreshold: Float = 0.6 // fixed
+    private let largeThreshold: Float = 0.4 // fixed
     
     public init() {
         do {
@@ -55,7 +55,7 @@ public final class LesionDetector: LesionDetecting {
         
         let largeResults = await self.detectLarge(in: pixelBuffer, orientation: orientation)
             .map({ LesionModel(object: $0, type: .large) })
-        let maxLarge = largeResults.max(by: { $0.object.confidence > $1.object.confidence })?.object.confidence ?? 0.0
+        //let maxLarge = largeResults.max(by: { $0.object.confidence > $1.object.confidence })?.object.confidence ?? 0.0
         
         
 //        let smallResults = await self.detectSmall(in: pixelBuffer, orientation: orientation)
@@ -98,6 +98,7 @@ public final class LesionDetector: LesionDetecting {
         do {
             try handler.perform([self.largeModelRequest])
             let rawResults = (self.largeModelRequest.results as? [VNRecognizedObjectObservation]) ?? []
+            print("rawResults",rawResults.map({"\($0.labels.first!.identifier): \(String(format: "%.5f", $0.confidence))"}))
             let results = rawResults.filter({ $0.confidence >= largeThreshold })
 //            print(results.isEmpty ? "" : "Large Lesion Results: \(results.count)")
             return results

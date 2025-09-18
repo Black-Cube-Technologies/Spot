@@ -49,20 +49,37 @@ public enum DepthCalibratorAVF {
                let stride = CVPixelBufferGetBytesPerRow(dm) / MemoryLayout<Float32>.size
                let ptr    = unsafeBitCast(CVPixelBufferGetBaseAddress(dm), to: UnsafePointer<Float32>.self)
 
-               // 4) Collect median Z (meters) with sub-sampling for speed
+               // 4) Collect median Z (meters) from a RING around the ROI to avoid lesion contamination
+               // Build an outer rect by inflating the ROI in depth space, then sample outer - inner
+               let pad = max(6.0, min(rD.width, rD.height) * 0.10) // ~10% of ROI or at least 6 depth px
+               let outer = CGRect(
+                   x: max(0, rD.minX - pad),
+                   y: max(0, rD.minY - pad),
+                   width: min(dw, rD.maxX + pad) - max(0, rD.minX - pad),
+                   height: min(dh, rD.maxY + pad) - max(0, rD.minY - pad)
+               ).integral
+
                var zs: [Float] = []
-               let x0 = max(0, Int(rD.minX)), x1 = min(Int(dw)-1, Int(rD.maxX))
-               let y0 = max(0, Int(rD.minY)), y1 = min(Int(dh)-1, Int(rD.maxY))
+               // Light decimation so we don't sample every pixel
+               let step = max(1, Int(min(outer.width, outer.height) / 72))
+
+               let x0 = Int(outer.minX), x1 = max(Int(outer.maxX) - 1, Int(outer.minX))
+               let y0 = Int(outer.minY), y1 = max(Int(outer.maxY) - 1, Int(outer.minY))
                var y = y0
                while y <= y1 {
-                   let row = ptr + y*stride
+                   let row = ptr + y * stride
                    var x = x0
                    while x <= x1 {
-                       let z = row[x]
+                       // Skip inner rect (lesion area)
+                       if x >= Int(rD.minX), x < Int(rD.maxX), y >= Int(rD.minY), y < Int(rD.maxY) {
+                           x += step
+                           continue
+                       }
+                       let z = row[x] // meters (DepthFloat32)
                        if z.isFinite && z > 0 { zs.append(z) }
-                       x += 2
+                       x += step
                    }
-                   y += 2
+                   y += step
                }
                guard let zMedianM = zs.median else { return nil }
                let zMM = CGFloat(zMedianM * 1000.0)
