@@ -63,8 +63,6 @@ struct LesionView: View {
             }
             // Bottom HUD: size/units + three zoom presets
             VStack(spacing: 14) {
-                
-                // Three zoom presets: 1× (2.0), 2× (6.0), 3× (10.0)
                 HStack(spacing: 12) {
                     zoomPresetButton(title: "1×", targetZoom: 2.0) { vm.setPresetZoom1x() }
                     zoomPresetButton(title: "2×", targetZoom: 6.0) { vm.setPresetZoom2x() }

@@ -4,13 +4,14 @@ import AVFoundation
 import Combine
 import CoreVideo
 import CoreGraphics
-
+import UIKit
 final class CameraService: NSObject,
                            CameraZoomControlling,
                            CameraStreaming,
                            AVCaptureDataOutputSynchronizerDelegate,
                            AVCaptureDepthDataOutputDelegate,
                            AVCaptureVideoDataOutputSampleBufferDelegate {
+
 
     
     func getCameraDevice() -> AVCaptureDevice? {
@@ -23,9 +24,11 @@ final class CameraService: NSObject,
     private let videoQueue   = DispatchQueue(label: "camera.video.queue")
 
     private var cameraDevice: AVCaptureDevice?
+    private var videoInput: AVCaptureDeviceInput?
 
     private let videoOutput  = AVCaptureVideoDataOutput()
     private let depthOutput  = AVCaptureDepthDataOutput()
+    private let photoOutput  = AVCapturePhotoOutput()
     private var synchronizer: AVCaptureDataOutputSynchronizer?
 
     // Frames publisher (unchanged)
@@ -54,6 +57,8 @@ final class CameraService: NSObject,
 
     private var startAt: Date = .distantPast
     private var darkStreak: Int = 0
+    
+    var captureDelegates : [String:RAWCaptureDelegate] = [:]
 
     override init() {
         super.init()
@@ -64,21 +69,26 @@ final class CameraService: NSObject,
     private func configure() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            self.session.sessionPreset = .hd4K3840x2160
 
             let device =
+            
                 AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back) ??
                 AVCaptureDevice.default(.builtInDualCamera,     for: .video, position: .back) ??
                 AVCaptureDevice.default(.builtInWideAngleCamera,for: .video, position: .back)
 
             guard let videoDevice = device,
-                  let input = try? AVCaptureDeviceInput(device: videoDevice),
-                  self.session.canAddInput(input) else {
+                  let input = try? AVCaptureDeviceInput(device: videoDevice) else {
                 self.session.commitConfiguration(); return
             }
-
-            self.cameraDevice = videoDevice
-            self.session.addInput(input)
+            if let existing = self.videoInput { self.session.removeInput(existing) }
+            if self.session.canAddInput(input) {
+                self.session.addInput(input)
+                self.videoInput = input
+                self.cameraDevice = videoDevice
+            } else {
+                self.session.commitConfiguration(); return
+            }
 
             self.videoOutput.alwaysDiscardsLateVideoFrames = true
             self.videoOutput.videoSettings = [
@@ -109,6 +119,17 @@ final class CameraService: NSObject,
                 self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
             }
 
+            
+            
+            if self.session.canAddOutput(self.photoOutput) {
+                self.session.addOutput(self.photoOutput)
+                
+                // Use the Apple ProRAW format when the environment supports it.
+                self.photoOutput.isAppleProRAWEnabled = self.photoOutput.isAppleProRAWSupported
+            } else {
+                print("Camera photoOutput not adding")
+            }
+            
             // Exposure prefs
             do {
                 try videoDevice.lockForConfiguration()
@@ -205,6 +226,42 @@ final class CameraService: NSObject,
         }
         packSubject.send(FramePack(sampleBuffer: sampleBuffer, depthData: nil))
     }
+    
+    func captureProRAWPhoto(completion: @escaping (UIImage) -> Void){
+        let query = photoOutput.isAppleProRAWEnabled ?
+            { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
+            { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
+
+
+        // Retrieve the RAW format, favoring the Apple ProRAW format when it's in an enabled state.
+        guard let rawFormat =
+                photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) else {
+            fatalError("No RAW format found.")
+        }
+
+
+        // Capture a RAW format photo, along with a processed format photo.
+        let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
+        let photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat,
+                                                   processedFormat: processedFormat)
+
+
+        // Create a delegate to monitor the capture process.
+        let delegate = RAWCaptureDelegate()
+        captureDelegates[photoSettings.uniqueID.formatted()] = delegate
+
+
+        // Remove the delegate reference when it finishes its processing.
+        delegate.didFinish = { image in
+            completion(image)
+            self.captureDelegates[photoSettings.uniqueID.formatted()] = nil
+        }
+
+
+        // Tell the output to capture the photo.
+        photoOutput.capturePhoto(with: photoSettings, delegate: delegate)
+    }
+    
 
     // MARK: - Brightness handling (startup warmup + dark streak)
     private func handleBrightness(_ b: CGFloat) {
@@ -297,4 +354,96 @@ final class CameraService: NSObject,
 
         return 1.0
     }
+    
+    // MARK: - Reconfigure to Triple 4K and capture JPEG
+    func reconfigureToTriple4K(completion: (() -> Void)?) {
+        sessionQueue.async {
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .hd4K3840x2160
+
+            // Prefer built-in triple camera if available
+            let desired = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) ??
+                          AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back) ??
+                          AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back) ??
+                          AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+
+            if let desired, let newInput = try? AVCaptureDeviceInput(device: desired) {
+                if let existing = self.videoInput { self.session.removeInput(existing) }
+                if self.session.canAddInput(newInput) {
+                    self.session.addInput(newInput)
+                    self.videoInput = newInput
+                    self.cameraDevice = desired
+                }
+            }
+
+            if let c = self.videoOutput.connection(with: .video) {
+                if c.isCameraIntrinsicMatrixDeliverySupported { c.isCameraIntrinsicMatrixDeliveryEnabled = true }
+                if #available(iOS 17.0, *) { c.videoRotationAngle = 90 } else { c.videoOrientation = .portrait }
+            }
+
+            self.session.commitConfiguration()
+            DispatchQueue.main.async { completion?() }
+        }
+    }
+
+    func capturePhotoJPEG(completion: @escaping (UIImage) -> Void) {
+        // Standard processed JPEG/HEIF capture for full-resolution still
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        let delegate = RAWCaptureDelegate()
+        self.captureDelegates[settings.uniqueID.formatted()] = delegate
+        delegate.didFinish = { image in
+            completion(image)
+            self.captureDelegates[settings.uniqueID.formatted()] = nil
+        }
+        self.photoOutput.capturePhoto(with: settings, delegate: delegate)
+    }
 }
+class RAWCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    
+    private var rawFileURL: URL?
+    private var compressedData: Data?
+    
+    var didFinish: ((UIImage) -> Void)?
+    
+    // Store the RAW file and compressed photo data until the capture finishes.
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+        
+        guard error == nil else {
+            print("Error capturing photo: \(error!)")
+            return
+        }
+        
+        // Access the file data representation of this photo.
+        guard let photoData = photo.fileDataRepresentation() else {
+            print("No photo data to write.")
+            return
+        }
+        
+        
+        if photo.isRawPhoto {
+            // Generate a unique URL to write the RAW file.
+            rawFileURL = makeUniqueDNGFileURL()
+            do {
+                // Write the RAW (DNG) file data to a URL.
+                try photoData.write(to: rawFileURL!)
+                if let img = UIImage(data: photoData)?.rotated(byDegrees: 0.01){
+                    self.didFinish!(img)
+                }
+            } catch {
+                fatalError("Couldn't write DNG file to the URL.")
+            }
+        } else {
+            // Store compressed bitmap data.
+            compressedData = photoData
+        }
+    }
+    
+    private func makeUniqueDNGFileURL() -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = ProcessInfo.processInfo.globallyUniqueString
+        return tempDir.appendingPathComponent(fileName).appendingPathExtension("dng")
+    }
+}
+

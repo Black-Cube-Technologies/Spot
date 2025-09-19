@@ -11,6 +11,27 @@ import CoreMedia
 import AVFoundation
 class ImageUtility{
     
+    /// Returns a single scale multiplier describing how much larger/smaller `other` is
+    /// compared to `reference`, based on the longest side in pixel space.
+    /// - Note: Uses pixel dimensions (width * scale, height * scale) to be resolution-accurate.
+    /// - Parameters:
+    ///   - reference: The reference image (denominator).
+    ///   - other: The image to compare (numerator).
+    /// - Returns: `otherLongestSide / referenceLongestSide`. Returns 1 if the reference has zero size.
+    static func sizeMultiplier(between reference: UIImage, and other: UIImage) -> CGFloat {
+        // Compute pixel sizes to account for image scale
+        let refW = reference.size.width * reference.scale
+        let refH = reference.size.height * reference.scale
+        let othW = other.size.width * other.scale
+        let othH = other.size.height * other.scale
+
+        let refMax = max(refW, refH)
+        let othMax = max(othW, othH)
+
+        guard refMax > 0 else { return 1 }
+        return othMax / refMax
+    }
+    
     enum OriginSpace { case topLeft, bottomLeft }
     
     static private let ciCtx: CIContext = {
@@ -150,3 +171,4 @@ private extension CGFloat {
         CGFloat.maximum(0, CGFloat.minimum(1, self))
     }
 }
+

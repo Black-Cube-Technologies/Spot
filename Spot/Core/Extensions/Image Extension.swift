@@ -94,3 +94,40 @@ private extension CGRect {
         return CGRect(x: x, y: y, width: w, height: h)
     }
 }
+
+
+extension UIImage {
+    /// Returns a new image rotated by the given degrees around its center.
+    /// The resulting image is rendered with an `.up` orientation and preserves the original scale.
+    /// - Parameter degrees: Rotation in degrees. Positive values rotate counter-clockwise.
+    /// - Returns: A new rotated UIImage.
+    func rotated(byDegrees degrees: CGFloat) -> UIImage {
+        let normalized = degrees.truncatingRemainder(dividingBy: 360)
+        if normalized == 0 { return self }
+
+        let radians = normalized * .pi / 180
+        // Compute the size of the rotated bounding box
+        let originalSize = self.size
+        let rect = CGRect(origin: .zero, size: originalSize)
+        let rotatedRect = rect.applying(CGAffineTransform(rotationAngle: radians))
+        let outSize = CGSize(width: abs(rotatedRect.width), height: abs(rotatedRect.height))
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = self.scale
+        format.opaque = false
+
+        let renderer = UIGraphicsImageRenderer(size: outSize, format: format)
+        let img = renderer.image { ctx in
+            let cg = ctx.cgContext
+            // Move origin to the center of the output image
+            cg.translateBy(x: outSize.width / 2, y: outSize.height / 2)
+            cg.rotate(by: radians)
+            // Draw the original image centered
+            self.draw(in: CGRect(x: -originalSize.width / 2,
+                                 y: -originalSize.height / 2,
+                                 width: originalSize.width,
+                                 height: originalSize.height))
+        }
+        return img
+    }
+}

@@ -85,6 +85,7 @@ public struct LesionResultView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { vm.onAppear() }
         .toolbar {
+            // Menu (•••)
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button("Delete Temp Image", role: .destructive) {
@@ -93,8 +94,35 @@ public struct LesionResultView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More")
+            }
+
+            // Share (square.and.arrow.up) — appears on the far right
+            ToolbarItem(placement: .navigationBarTrailing) {
+                // Prefer sharing the temp file URL so recipients get the actual image file.
+                if FileManager.default.fileExists(atPath: vm.lesion.imageURL.path) {
+                    ShareLink(
+                        item: vm.lesion.imageURL,
+                        subject: Text("Lesion Photo"),
+                        message: Text("Shared from Spot")
+                    ) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share Image")
+                }
+                //else if let uiImg = vm.image {
+//                    // Fallback: share the in-memory image if URL missing
+//                    ShareLink(
+//                        item: uiImg,
+//                        preview: SharePreview("Lesion Photo", image: Image(uiImage: uiImg))
+//                    ) {
+//                        Image(systemName: "square.and.arrow.up")
+//                    }
+//                    .accessibilityLabel("Share Image")
+//                }
             }
         }
+
     }
     
     // MARK: - UI helpers

@@ -5,9 +5,9 @@
 //  Created by Hasan on 26/08/2025.
 //
 
-
 import AVFoundation
 import Combine
+import UIKit
 
 public protocol CameraStreaming: AnyObject {
     var frames: AnyPublisher<FramePack, Never> { get }
@@ -15,6 +15,9 @@ public protocol CameraStreaming: AnyObject {
     func start()
     func stop()
     func getCameraDevice() -> AVCaptureDevice?
+    func captureProRAWPhoto(completion: @escaping (UIImage) -> Void)
+    func reconfigureToTriple4K(completion: (() -> Void)?)
+    func capturePhotoJPEG(completion: @escaping (UIImage) -> Void)
 }
 
 public struct FramePack { // Added

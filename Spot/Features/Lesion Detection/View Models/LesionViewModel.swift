@@ -313,7 +313,7 @@ public final class LesionViewModel: ObservableObject {
         return nil
     }
     
-    private func emptyMeasurementValues(){
+    func emptyMeasurementValues(){
         validMeasurementValues = []
     }
     
@@ -322,24 +322,33 @@ public final class LesionViewModel: ObservableObject {
                                        widthMM: Double,
                                        heightMM: Double,
                                        lesionRectBL: CGRect) { // <— NEW param (Vision's normalized BL rect)
-        guard let fullImage = ImageUtility.uiImage(from: pixelBuffer, orientation: visionOrientation) else { return }
+        //camera.captureProRAWPhoto { proRawPhoto  in
+            guard let fullImage = ImageUtility.uiImage(from: pixelBuffer, orientation: self.visionOrientation) else { return }
+            //let sizeMultiplier = ImageUtility.sizeMultiplier(between: fullImage, and: proRawPhoto)
+            var shouldEnlargeRect =  false
+            // Crop to the lesion (tight rectangle)
+            if heightMM < 10 && widthMM < 10{
+                shouldEnlargeRect = true
+            }
+            
+            let cropped = ImageUtility.cropUIImage(fullImage, toNormalizedBL: shouldEnlargeRect ? lesionRectBL.scaledAboutCenter(widthFactor: 1.5, heightFactor: 1.5) : lesionRectBL) ?? fullImage
 
-        // Crop to the lesion (tight rectangle)
-        let cropped = ImageUtility.cropUIImage(fullImage, toNormalizedBL: lesionRectBL) ?? fullImage
-
-        let id = UUID().uuidString
-        do {
-            let fileURL = try LocalTempImageStore().saveTempJPEG(cropped, id: id, quality: 0.92)
-            guard lesion == nil else { return }
-            self.lesion = Lesion(
-                width:  widthMM,
-                height: heightMM,
-                imageURL: fileURL,
-                boundedBoxes: boxNorms.map(\.normBox) // keep if you still overlay later
-            )
-        } catch {
-            print("Saving temp image failed: \(error)")
-        }
+            let id = UUID().uuidString
+            do {
+                let fileURL = try LocalTempImageStore().saveTempJPEG(cropped, id: id, quality: 1)
+                guard self.lesion == nil else { return }
+                self.lesion = Lesion(
+                    width:  widthMM,
+                    height: heightMM,
+                    imageURL: fileURL,
+                    boundedBoxes: self.boxNorms.map(\.normBox) // keep if you still overlay later
+                )
+            } catch {
+                print("Saving temp image failed: \(error)")
+            }
+        //}
+        //
+        
     }
 
 }
