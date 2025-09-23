@@ -69,10 +69,9 @@ final class CameraService: NSObject,
     private func configure() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            self.session.sessionPreset = .hd4K3840x2160
+            self.session.sessionPreset = .photo
 
             let device =
-            
                 AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back) ??
                 AVCaptureDevice.default(.builtInDualCamera,     for: .video, position: .back) ??
                 AVCaptureDevice.default(.builtInWideAngleCamera,for: .video, position: .back)
@@ -125,7 +124,7 @@ final class CameraService: NSObject,
                 self.session.addOutput(self.photoOutput)
                 
                 // Use the Apple ProRAW format when the environment supports it.
-                self.photoOutput.isAppleProRAWEnabled = self.photoOutput.isAppleProRAWSupported
+                //self.photoOutput.isAppleProRAWEnabled = self.photoOutput.isAppleProRAWSupported
             } else {
                 print("Camera photoOutput not adding")
             }
@@ -148,6 +147,7 @@ final class CameraService: NSObject,
 
     // MARK: - Start/Stop
     func start() {
+        configure()
         sessionQueue.async {
             guard !self.session.isRunning else { return }
             self.darkStreak = 0
@@ -357,6 +357,7 @@ final class CameraService: NSObject,
     
     // MARK: - Reconfigure to Triple 4K and capture JPEG
     func reconfigureToTriple4K(completion: (() -> Void)?) {
+        setPresetZoom1x()
         sessionQueue.async {
             self.session.beginConfiguration()
             self.session.sessionPreset = .hd4K3840x2160
@@ -376,6 +377,39 @@ final class CameraService: NSObject,
                 }
             }
 
+            // Improve AF/AE behavior for 4K configuration
+            if let desired = self.cameraDevice {
+                do {
+                    try desired.lockForConfiguration()
+
+                    if desired.isFocusModeSupported(.continuousAutoFocus) {
+                        desired.focusMode = .continuousAutoFocus
+                    }
+                    if desired.isSmoothAutoFocusSupported {
+                        desired.isSmoothAutoFocusEnabled = true
+                    }
+                    if desired.isAutoFocusRangeRestrictionSupported {
+                        // Prefer near range for close-up subjects; adjust to .none if undesired
+                        desired.autoFocusRangeRestriction = .near
+                    }
+                    if desired.isFocusPointOfInterestSupported {
+                        desired.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                    }
+                    desired.isSubjectAreaChangeMonitoringEnabled = true
+
+                    if desired.isExposureModeSupported(.continuousAutoExposure) {
+                        desired.exposureMode = .continuousAutoExposure
+                    }
+                    if desired.isLowLightBoostSupported {
+                        desired.automaticallyEnablesLowLightBoostWhenAvailable = true
+                    }
+
+                    desired.unlockForConfiguration()
+                } catch {
+                    // Ignore configuration errors
+                }
+            }
+
             if let c = self.videoOutput.connection(with: .video) {
                 if c.isCameraIntrinsicMatrixDeliverySupported { c.isCameraIntrinsicMatrixDeliveryEnabled = true }
                 if #available(iOS 17.0, *) { c.videoRotationAngle = 90 } else { c.videoOrientation = .portrait }
@@ -388,6 +422,9 @@ final class CameraService: NSObject,
 
     func capturePhotoJPEG(completion: @escaping (UIImage) -> Void) {
         // Standard processed JPEG/HEIF capture for full-resolution still
+        guard let activeConnection = self.photoOutput.connection(with: .video), activeConnection.isEnabled else {
+            return
+        }
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         let delegate = RAWCaptureDelegate()
         self.captureDelegates[settings.uniqueID.formatted()] = delegate
@@ -435,8 +472,16 @@ class RAWCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
                 fatalError("Couldn't write DNG file to the URL.")
             }
         } else {
-            // Store compressed bitmap data.
+            // Processed (non-RAW) photo path: create UIImage from compressed data and finish.
             compressedData = photoData
+            if let img = UIImage(data: photoData)?.rotated(byDegrees: 0.01) {
+                self.didFinish?(img)
+            } else if let img = UIImage(data: photoData) {
+                // Fallback without rotation if rotation helper is unavailable
+                self.didFinish?(img)
+            } else {
+                print("Failed to create UIImage from processed photo data.")
+            }
         }
     }
     

@@ -62,26 +62,47 @@ struct LesionView: View {
                 }
             }
             // Bottom HUD: size/units + three zoom presets
+            
             VStack(spacing: 14) {
-                HStack(spacing: 12) {
-                    zoomPresetButton(title: "1×", targetZoom: 2.0) { vm.setPresetZoom1x() }
-                    zoomPresetButton(title: "2×", targetZoom: 6.0) { vm.setPresetZoom2x() }
-                    zoomPresetButton(title: "3×", targetZoom: 10.0) { vm.setPresetZoom3x() }
-                }
-                
-                HStack(spacing: 12) {
-                    Text(vm.sizeText)
-                        .font(.headline)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    
-                    Picker("", selection: $vm.units) {
-                        Text("cm").tag(UnitSystem.metric)
-                        Text("in").tag(UnitSystem.imperial)
+                //if !vm.didAchieveModelValue{
+                    HStack(spacing: 12) {
+                        zoomPresetButton(title: "1×", targetZoom: 2.0) { vm.setPresetZoom1x() }
+                        zoomPresetButton(title: "2×", targetZoom: 6.0) { vm.setPresetZoom2x() }
+                        zoomPresetButton(title: "3×", targetZoom: 10.0) { vm.setPresetZoom3x() }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 120)
-                }
+               // }
+//               if vm.didAchieveModelValue{
+//                    
+//                    // Centered camera shutter button
+//                    HStack {
+//                        Spacer()
+//                        Button {
+//                            // TODO: Hook this up to your capture function on the view model (e.g., vm.capturePhoto())
+//                            vm.capturePhoto()
+//                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+//                        } label: {
+//                            ZStack {
+//                                // Outer subtle halo
+//                                Circle()
+//                                    .fill(Color.white.opacity(0.12))
+//                                    .frame(width: 84, height: 84)
+//                                // Outer ring
+//                                Circle()
+//                                    .stroke(Color.white, lineWidth: 4)
+//                                    .frame(width: 78, height: 78)
+//                                // Inner filled circle
+//                                Circle()
+//                                    .fill(Color.white)
+//                                    .frame(width: 64, height: 64)
+//                            }
+//                        }
+//                        .buttonStyle(.plain)
+//                        .accessibilityLabel(Text("Camera shutter"))
+//                        .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 2)
+//                        Spacer()
+//                    }
+//                    
+//                }
             }
             .padding(.bottom, 24)
         }

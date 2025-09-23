@@ -98,7 +98,7 @@ public final class LesionDetector: LesionDetecting {
         do {
             try handler.perform([self.largeModelRequest])
             let rawResults = (self.largeModelRequest.results as? [VNRecognizedObjectObservation]) ?? []
-            print("rawResults",rawResults.map({"\($0.labels.first!.identifier): \(String(format: "%.5f", $0.confidence))"}))
+            //print("rawResults",rawResults.map({"\($0.labels.first!.identifier): \(String(format: "%.5f", $0.confidence))"}))
             let results = rawResults.filter({ $0.confidence >= largeThreshold })
 //            print(results.isEmpty ? "" : "Large Lesion Results: \(results.count)")
             return results
